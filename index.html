@@ -52,7 +52,8 @@
             margin-bottom: 15px;
         }
         .expense-form input[type="text"], 
-        .expense-form input[type="number"] {
+        .expense-form input[type="number"],
+        .expense-form select {
             padding: 10px;
             width: 90%;
             border: 1px solid #ccc;
@@ -80,6 +81,22 @@
         }
         button:hover {
             background-color: #005f5f;
+        }
+        /* Expense List Item */
+        #expenses-list li {
+            border: 1px solid #eee;
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+        }
+        .expense-actions button {
+            padding: 5px 10px;
+            font-size: 14px;
+            margin-left: 10px;
+            background-color: #f0ad4e; /* Orange for Edit */
+        }
+        .expense-actions button:hover {
+             background-color: #ec971f;
         }
         /* Results */
         #results {
@@ -129,8 +146,9 @@
         </div>
 
         <div class="section">
-            <h2>💰 2. Enter Expenses</h2>
+            <h2>💰 2. Enter/Edit Expenses</h2>
             <form id="expense-form">
+                <input type="hidden" id="edit-expense-index">
                 <div>
                     <label for="expense-description">Description:</label>
                     <input type="text" id="expense-description" required>
@@ -150,7 +168,7 @@
                         <p>Please add members first.</p>
                         </div>
                 </div>
-                <button type="submit">Add Expense</button>
+                <button type="submit" id="submit-expense-button">Add Expense</button>
             </form>
 
             <h3 style="margin-top: 25px;">Expenses List</h3>
@@ -168,7 +186,6 @@
     </div>
 
     <script>
-        // JAVASCRIPT LOGIC IS INCLUDED HERE
         
         let members = [];
         let expenses = [];
@@ -197,6 +214,7 @@
             // Update Split Among Checkboxes
             const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
             if (members.length > 0) {
+                // This clears the innerHTML completely and rebuilds the checklist
                 splitCheckboxesDiv.innerHTML = members.map(m => `
                     <label>
                         <input type="checkbox" name="split-member" value="${m}" checked> ${m}
@@ -205,6 +223,7 @@
             } else {
                 splitCheckboxesDiv.innerHTML = '<p>Please add members first.</p>';
             }
+            updateExpensesList(); // Refresh list to ensure it's up to date
         }
         
         // --- Expense Management ---
@@ -215,6 +234,7 @@
             const description = document.getElementById('expense-description').value;
             const amount = parseFloat(document.getElementById('expense-amount').value);
             const paidBy = document.getElementById('expense-paid-by').value;
+            const editIndex = document.getElementById('edit-expense-index').value;
             
             const splitMembers = Array.from(document.querySelectorAll('input[name="split-member"]:checked'))
                 .map(input => input.value);
@@ -224,15 +244,33 @@
                 return;
             }
             
-            const newExpense = {
+            const newExpenseData = {
                 description,
                 amount,
                 paidBy,
                 splitMembers
             };
             
-            expenses.push(newExpense);
+            if (editIndex !== '') {
+                // EDIT MODE: Update existing expense
+                expenses[parseInt(editIndex)] = newExpenseData;
+                alert('Expense updated!');
+            } else {
+                // ADD MODE: Add new expense
+                expenses.push(newExpenseData);
+                alert('Expense added!');
+            }
+
+            // Reset form for next entry
             document.getElementById('expense-form').reset();
+            document.getElementById('edit-expense-index').value = '';
+            document.getElementById('submit-expense-button').textContent = 'Add Expense';
+            
+            // Default check all members again after a reset
+            document.querySelectorAll('input[name="split-member"]').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+
             updateExpensesList();
         });
         
@@ -243,11 +281,46 @@
                     <strong>${exp.description}: $${exp.amount.toFixed(2)}</strong>
                     <br>
                     Paid by: ${exp.paidBy}. Split among: ${exp.splitMembers.join(', ')}.
+                    <span class="expense-actions">
+                        <button onclick="editExpense(${index})">Edit</button>
+                    </span>
                 </li>
             `).join('');
         }
+
+        // --- NEW: Edit Functionality ---
+
+        function editExpense(index) {
+            const expense = expenses[index];
+            
+            // 1. Fill the hidden index input to signal 'Edit Mode'
+            document.getElementById('edit-expense-index').value = index;
+
+            // 2. Populate form fields
+            document.getElementById('expense-description').value = expense.description;
+            document.getElementById('expense-amount').value = expense.amount;
+            document.getElementById('expense-paid-by').value = expense.paidBy;
+
+            // 3. Update the button text
+            document.getElementById('submit-expense-button').textContent = 'Update Expense';
+
+            // 4. Update the split-among checkboxes
+            const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
+            // Rebuild the checkboxes with the correct checked status
+            splitCheckboxesDiv.innerHTML = members.map(m => {
+                const checked = expense.splitMembers.includes(m) ? 'checked' : '';
+                return `
+                    <label>
+                        <input type="checkbox" name="split-member" value="${m}" ${checked}> ${m}
+                    </label>
+                `;
+            }).join('');
+            
+            // Scroll to the top of the form for better UX
+            document.getElementById('expense-form').scrollIntoView({ behavior: 'smooth' });
+        }
         
-        // --- Calculation Logic ---
+        // --- Calculation Logic (No Changes) ---
         
         function calculateSettlements() {
             if (members.length === 0 || expenses.length === 0) {
@@ -307,10 +380,9 @@
                     amount: amountToPay
                 });
 
-                balances[debtor] += amountToPay; // Debtor balance moves closer to zero (less negative)
-                balances[creditor] -= amountToPay; // Creditor balance moves closer to zero (less positive)
+                balances[debtor] += amountToPay;
+                balances[creditor] -= amountToPay;
 
-                // Remove debtors/creditors whose balance is settled (within a small tolerance)
                 if (Math.abs(balances[debtor]) < 0.01) {
                     debtors.shift();
                 }
@@ -318,7 +390,6 @@
                     creditors.shift();
                 }
 
-                // Re-sort to handle cases where a large debt/credit was partially settled
                 creditors.sort((a, b) => balances[b] - balances[a]);
                 debtors.sort((a, b) => balances[a] - balances[b]);
             }
@@ -338,10 +409,6 @@
                 ${settlementHTML || '<p>Everyone is settled up!</p>'}
             `;
         }
-        
-        // Initialize with default members if you want
-        // members = ["Alice", "Bob", "Charlie"];
-        // updateUIElements();
         
     </script>
 
