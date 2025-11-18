@@ -1,217 +1,75 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trip Expense Splitter</title>
-    <style>
-        /* CSS is included here for simplicity */
-        body {
-            font-family: sans-serif;
-            margin: 20px;
-            background-color: #f4f7f6;
-            color: #333;
-        }
-        .container {
-            max-width: 900px;
-            margin: auto;
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        h2 {
-            color: #008080; /* Teal/Turquoise color */
-            border-bottom: 2px solid #e0e0e0;
-            padding-bottom: 10px;
-            margin-top: 0;
-        }
-        .section {
-            margin-bottom: 30px;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-        }
-        /* Member Management */
-        #member-input {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        #members-list span {
-            display: inline-block;
-            background-color: #e0f2f2;
-            color: #008080;
-            padding: 5px 10px;
-            margin: 5px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
-        /* Expense Form */
-        .expense-form div {
-            margin-bottom: 15px;
-        }
-        .expense-form input[type="text"], 
-        .expense-form input[type="number"],
-        .expense-form select {
-            padding: 10px;
-            width: 90%;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .expense-form label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        .member-checkboxes label {
-            display: inline-block;
-            margin-right: 15px;
-            font-weight: normal;
-        }
-        button {
-            background-color: #008080;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #005f5f;
-        }
-        /* Expense List Item */
-        #expenses-list li {
-            border: 1px solid #eee;
-            padding: 10px;
-            margin-bottom: 8px;
-            border-radius: 4px;
-        }
-        .expense-actions button {
-            padding: 5px 10px;
-            font-size: 14px;
-            margin-left: 10px;
-            background-color: #f0ad4e; /* Orange for Edit */
-        }
-        .expense-actions button:hover {
-             background-color: #ec971f;
-        }
-        /* Results */
-        #results {
-            border-top: 2px dashed #008080;
-            padding-top: 20px;
-        }
-        #results h3 {
-            color: #333;
-        }
-        .summary-item {
-            padding: 10px;
-            margin: 5px 0;
-            border-left: 5px solid;
-            background-color: #f9f9f9;
-        }
-        .owes {
-            border-left-color: #ff6347; /* Tomato Red */
-        }
-        .owed {
-            border-left-color: #3cb371; /* Medium Sea Green */
-        }
-        .settlement-item {
-            margin-top: 10px;
-            padding: 8px;
-            background-color: #e6e6fa; /* Light Lavender */
-            border-radius: 4px;
-        }
-        .settlement-item strong {
-            color: #483d8b; /* Dark Slate Blue */
-        }
-    </style>
-</head>
-<body>
-
-    <div class="container">
-        <h1>💸 Group Trip Expense Splitter</h1>
-
-        <div class="section">
-            <h2>👥 1. Manage Members</h2>
-            <div id="member-input">
-                <input type="text" id="new-member-name" placeholder="Enter member name (e.g., Alice, Bob)">
-                <button onclick="addMember()">Add Member</button>
-            </div>
-            <p>Current Members:</p>
-            <div id="members-list">
-                </div>
-        </div>
-
-        <div class="section">
-            <h2>💰 2. Enter/Edit Expenses</h2>
-            <form id="expense-form">
-                <input type="hidden" id="edit-expense-index">
-                <div>
-                    <label for="expense-description">Description:</label>
-                    <input type="text" id="expense-description" required>
-                </div>
-                <div>
-                    <label for="expense-amount">Amount ($):</label>
-                    <input type="number" id="expense-amount" min="0.01" step="0.01" required>
-                </div>
-                <div>
-                    <label for="expense-paid-by">Paid By:</label>
-                    <select id="expense-paid-by" required>
-                        </select>
-                </div>
-                <div>
-                    <label>Split Among (Check all members who benefited from this expense):</label>
-                    <div id="split-among-checkboxes" class="member-checkboxes">
-                        <p>Please add members first.</p>
-                        </div>
-                </div>
-                <button type="submit" id="submit-expense-button">Add Expense</button>
-            </form>
-
-            <h3 style="margin-top: 25px;">Expenses List</h3>
-            <ul id="expenses-list">
-                </ul>
-        </div>
-
-        <div class="section">
-            <h2>✅ 3. Final Results</h2>
-            <button onclick="calculateSettlements()">Calculate Final Balance</button>
-            <div id="results">
-                </div>
-        </div>
-
-    </div>
-
+<script>
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyAXsCINHxQXYxTcge4Mp9St3XzeG4vZwjE",
+  authDomain: "trip-splitter-7d2ee.firebaseapp.com",
+  projectId: "trip-splitter-7d2ee",
+  storageBucket: "trip-splitter-7d2ee.firebasestorage.app",
+  messagingSenderId: "446178975806",
+  appId: "1:446178975806:web:9885d00d7f2af5a55d716f",
+  measurementId: "G-HS5GQ92RFY"
+};
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <script>
+
+        // =========================================================
+        // 2. PASTE YOUR CONFIGURATION HERE
+        // =========================================================
+        const firebaseConfig = {
+            // !!! REPLACE THIS ENTIRE CONFIG OBJECT WITH YOUR REAL KEYS !!!
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "SENDER_ID",
+            appId: "APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
         
+        // References for the database nodes
+        const membersRef = database.ref('members');
+        const expensesRef = database.ref('expenses');
+
+        // Local arrays will now be populated by Firebase listeners
         let members = [];
         let expenses = [];
         
-        // --- Member Management ---
+        // --- Member Management (UPDATED TO USE FIREBASE) ---
         
+        // Setup listener for members
+        membersRef.on('value', (snapshot) => {
+            members = [];
+            snapshot.forEach((childSnapshot) => {
+                members.push(childSnapshot.val());
+            });
+            updateUIElements();
+            console.log("Members loaded from Firebase.");
+        });
+
         function addMember() {
             const nameInput = document.getElementById('new-member-name');
             const name = nameInput.value.trim();
             if (name && !members.includes(name)) {
-                members.push(name);
+                // WRITE to Firebase
+                membersRef.child(name).set(name) 
                 nameInput.value = '';
-                updateUIElements();
             }
         }
         
+        // updateUIElements remains largely the same, but only rebuilds UI
         function updateUIElements() {
-            // Update Members List Display
+            // ... (Your existing updateUIElements code remains here)
             const membersListDiv = document.getElementById('members-list');
             membersListDiv.innerHTML = members.map(m => `<span>${m}</span>`).join('');
 
-            // Update Paid By Select
             const paidBySelect = document.getElementById('expense-paid-by');
             paidBySelect.innerHTML = members.map(m => `<option value="${m}">${m}</option>`).join('');
             
-            // Update Split Among Checkboxes
             const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
             if (members.length > 0) {
                 // This clears the innerHTML completely and rebuilds the checklist
@@ -223,10 +81,23 @@
             } else {
                 splitCheckboxesDiv.innerHTML = '<p>Please add members first.</p>';
             }
-            updateExpensesList(); // Refresh list to ensure it's up to date
+            updateExpensesList(); 
         }
-        
-        // --- Expense Management ---
+
+        // --- Expense Management (UPDATED TO USE FIREBASE) ---
+
+        // Setup listener for expenses
+        expensesRef.on('value', (snapshot) => {
+            expenses = [];
+            // We store the Firebase key along with the expense data for editing
+            snapshot.forEach((childSnapshot) => {
+                const expense = childSnapshot.val();
+                expense.key = childSnapshot.key; 
+                expenses.push(expense);
+            });
+            updateExpensesList();
+            console.log("Expenses loaded from Firebase.");
+        });
         
         document.getElementById('expense-form').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -234,7 +105,7 @@
             const description = document.getElementById('expense-description').value;
             const amount = parseFloat(document.getElementById('expense-amount').value);
             const paidBy = document.getElementById('expense-paid-by').value;
-            const editIndex = document.getElementById('edit-expense-index').value;
+            const editKey = document.getElementById('edit-expense-index').value; // Now holds the Firebase key
             
             const splitMembers = Array.from(document.querySelectorAll('input[name="split-member"]:checked'))
                 .map(input => input.value);
@@ -244,34 +115,30 @@
                 return;
             }
             
-            const newExpenseData = {
+            const expenseData = {
                 description,
                 amount,
                 paidBy,
                 splitMembers
             };
             
-            if (editIndex !== '') {
-                // EDIT MODE: Update existing expense
-                expenses[parseInt(editIndex)] = newExpenseData;
+            if (editKey !== '') {
+                // EDIT MODE: Update existing expense in Firebase
+                expensesRef.child(editKey).update(expenseData);
                 alert('Expense updated!');
             } else {
-                // ADD MODE: Add new expense
-                expenses.push(newExpenseData);
+                // ADD MODE: Push new expense to Firebase
+                expensesRef.push(expenseData);
                 alert('Expense added!');
             }
 
-            // Reset form for next entry
+            // Reset form
             document.getElementById('expense-form').reset();
             document.getElementById('edit-expense-index').value = '';
             document.getElementById('submit-expense-button').textContent = 'Add Expense';
-            
-            // Default check all members again after a reset
             document.querySelectorAll('input[name="split-member"]').forEach(checkbox => {
                 checkbox.checked = true;
             });
-
-            updateExpensesList();
         });
         
         function updateExpensesList() {
@@ -288,13 +155,13 @@
             `).join('');
         }
 
-        // --- NEW: Edit Functionality ---
+        // --- Edit Functionality (UPDATED TO USE INDEX TO FIND KEY) ---
 
         function editExpense(index) {
             const expense = expenses[index];
             
-            // 1. Fill the hidden index input to signal 'Edit Mode'
-            document.getElementById('edit-expense-index').value = index;
+            // 1. Fill the hidden index input with the Firebase key
+            document.getElementById('edit-expense-index').value = expense.key;
 
             // 2. Populate form fields
             document.getElementById('expense-description').value = expense.description;
@@ -306,7 +173,6 @@
 
             // 4. Update the split-among checkboxes
             const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
-            // Rebuild the checkboxes with the correct checked status
             splitCheckboxesDiv.innerHTML = members.map(m => {
                 const checked = expense.splitMembers.includes(m) ? 'checked' : '';
                 return `
@@ -316,13 +182,13 @@
                 `;
             }).join('');
             
-            // Scroll to the top of the form for better UX
             document.getElementById('expense-form').scrollIntoView({ behavior: 'smooth' });
         }
         
-        // --- Calculation Logic (No Changes) ---
+        // --- Calculation Logic (Still uses local 'expenses' array, which is updated by Firebase) ---
         
         function calculateSettlements() {
+            // ... (Your existing calculateSettlements code remains here)
             if (members.length === 0 || expenses.length === 0) {
                 document.getElementById('results').innerHTML = '<p>Please add members and expenses first.</p>';
                 return;
@@ -411,6 +277,3 @@
         }
         
     </script>
-
-</body>
-</html>
