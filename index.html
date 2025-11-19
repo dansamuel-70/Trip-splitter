@@ -85,15 +85,13 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
     <script>
-        [cite_start]// Your code starts here, including the placeholder config [cite: 2]
-        
         // =========================================================
-        // 2. PASTE YOUR CONFIGURATION HERE
+        // 1. PASTE YOUR CONFIGURATION HERE
         // ** IMPORTANT: REPLACE THIS ENTIRE OBJECT WITH YOUR REAL KEYS **
         // =========================================================
         const firebaseConfig = {
-            // !!! [cite_start]REPLACE THIS ENTIRE CONFIG OBJECT WITH YOUR REAL KEYS !!! [cite: 2]
-            [cite_start]apiKey: "AIzaSyAXsCINHxQXYxTcge4Mp9St3XzeG4vZwjE", // Placeholder [cite: 3]
+            // !!! REPLACE THIS ENTIRE CONFIG OBJECT WITH YOUR REAL KEYS !!!
+            apiKey: "MyKey",
             authDomain: "trip-splitter-7d2ee.firebaseapp.com",
             databaseURL: "https://trip-splitter-7d2ee-default-rtdb.firebaseio.com",
             projectId: "trip-splitter-7d2ee",
@@ -102,18 +100,19 @@
             appId: "1:446178975806:web:9885d00d7f2af5a55d716f",
             measurementId: "G-HS5GQ92RFY"
         };
-        [cite_start]// Initialize Firebase [cite: 4]
+
+        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        [cite_start]// References for the database nodes [cite: 5, 6]
+        // References for the database nodes
         const membersRef = database.ref('members');
         const expensesRef = database.ref('expenses');
 
-        [cite_start]// Local arrays will now be populated by Firebase listeners [cite: 7]
+        // Local arrays will now be populated by Firebase listeners
         let members = [];
         let expenses = [];
         
-        // --- Member Management (UPDATED TO USE FIREBASE) ---
+        // --- Member Management ---
         
         // Setup listener for members
         membersRef.on('value', (snapshot) => {
@@ -122,58 +121,57 @@
                 members.push(childSnapshot.val());
             });
  
-            [cite_start]updateUIElements(); // [cite: 8]
+            updateUIElements();
             console.log("Members loaded from Firebase.");
         });
-        [cite_start]function addMember() { // [cite: 9]
+
+        function addMember() {
             const nameInput = document.getElementById('new-member-name');
-            const name = nameInput.value.trim(); [cite_start]// [cite: 10]
+            const name = nameInput.value.trim();
             if (name && !members.includes(name)) {
                 // WRITE to Firebase
                 membersRef.child(name).set(name) 
                 nameInput.value = '';
-            [cite_start]} // [cite: 11]
+            }
         }
         
-        // updateUIElements remains largely the same, but only rebuilds UI
         function updateUIElements() {
-            // ... (Your existing updateUIElements code remains here)
             const membersListDiv = document.getElementById('members-list');
-            membersListDiv.innerHTML = members.map(m => `<span>${m}</span>`).join(''); [cite_start]// [cite: 12]
+            membersListDiv.innerHTML = members.map(m => `<span>${m}</span>`).join('');
 
             const paidBySelect = document.getElementById('expense-paid-by');
             paidBySelect.innerHTML = members.map(m => `<option value="${m}">${m}</option>`).join('');
             
             const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
-            [cite_start]if (members.length > 0) { // [cite: 13]
+            if (members.length > 0) {
                 // This clears the innerHTML completely and rebuilds the checklist
                 splitCheckboxesDiv.innerHTML = members.map(m => `
                     <label>
                         <input type="checkbox" name="split-member" value="${m}" checked> ${m}
-                    [cite_start]</label> // [cite: 14]
+                    </label>
                 `).join('');
-            [cite_start]} else { // [cite: 15]
-                splitCheckboxesDiv.innerHTML = '<p>Please add members first.</p>'; [cite_start]// [cite: 16]
+            } else {
+                splitCheckboxesDiv.innerHTML = '<p>Please add members first.</p>';
             }
-            updateExpensesList(); [cite_start]// [cite: 17]
+            updateExpensesList();
         }
 
-        // --- Expense Management (UPDATED TO USE FIREBASE) ---
+        // --- Expense Management ---
 
         // Setup listener for expenses
         expensesRef.on('value', (snapshot) => {
             expenses = [];
             // We store the Firebase key along with the expense data for editing
             snapshot.forEach((childSnapshot) => {
-         
-                [cite_start]const expense = childSnapshot.val(); // [cite: 18]
+                const expense = childSnapshot.val();
                 expense.key = childSnapshot.key; 
                 expenses.push(expense);
             });
             updateExpensesList();
             console.log("Expenses loaded from Firebase.");
         });
-        [cite_start]document.getElementById('expense-form').addEventListener('submit', function(e) { // [cite: 19]
+
+        document.getElementById('expense-form').addEventListener('submit', function(e) {
             e.preventDefault();
             
             const description = document.getElementById('expense-description').value;
@@ -182,43 +180,41 @@
             const editKey = document.getElementById('edit-expense-index').value; // Now holds the Firebase key
         
             const splitMembers = Array.from(document.querySelectorAll('input[name="split-member"]:checked'))
-                .map(input => input.value); [cite_start]// [cite: 20]
+                .map(input => input.value);
 
             if (splitMembers.length === 0) {
                 alert('Please select at least one person to split the expense among.');
                 return;
-     
-            [cite_start]} // [cite: 21]
+            }
             
             const expenseData = {
                 description,
                 amount,
                 paidBy,
                 splitMembers
-  
-            }; [cite_start]// [cite: 22]
-            [cite_start]if (editKey !== '') { // [cite: 23]
+            };
+            if (editKey !== '') {
                 // EDIT MODE: Update existing expense in Firebase
                 expensesRef.child(editKey).update(expenseData);
-                alert('Expense updated!'); [cite_start]// [cite: 24]
+                alert('Expense updated!');
             } else {
                 // ADD MODE: Push new expense to Firebase
                 expensesRef.push(expenseData);
-                alert('Expense added!'); [cite_start]// [cite: 25]
+                alert('Expense added!');
             }
 
             // Reset form
             document.getElementById('expense-form').reset();
-            document.getElementById('edit-expense-index').value = ''; [cite_start]// [cite: 26]
+            document.getElementById('edit-expense-index').value = '';
             document.getElementById('submit-expense-button').textContent = 'Add Expense';
             document.querySelectorAll('input[name="split-member"]').forEach(checkbox => {
                 checkbox.checked = true;
             });
-        }); [cite_start]// [cite: 27]
+        });
         
         function updateExpensesList() {
             const expensesListUl = document.getElementById('expenses-list');
-            [cite_start]expensesListUl.innerHTML = expenses.map((exp, index) => ` // [cite: 28]
+            expensesListUl.innerHTML = expenses.map((exp, index) => `
                 <li>
                     <div>
                         <strong>${exp.description}: $${exp.amount.toFixed(2)}</strong>
@@ -227,52 +223,49 @@
                     </div>
             
                     <span class="expense-actions">
-                        [cite_start]<button onclick="editExpense(${index})">Edit</button> // [cite: 29]
+                        <button onclick="editExpense(${index})">Edit</button>
                     </span>
                 </li>
-            `).join(''); [cite_start]// [cite: 30]
+            `).join('');
         }
 
-        // --- Edit Functionality (UPDATED TO USE INDEX TO FIND KEY) ---
+        // --- Edit Functionality ---
 
         function editExpense(index) {
             const expense = expenses[index];
             // 1. Fill the hidden index input with the Firebase key
-            document.getElementById('edit-expense-index').value = expense.key; [cite_start]// [cite: 31]
+            document.getElementById('edit-expense-index').value = expense.key;
             // 2. Populate form fields
-            document.getElementById('expense-description').value = expense.description; [cite_start]// [cite: 32]
-            document.getElementById('expense-amount').value = expense.amount; [cite_start]// [cite: 33]
+            document.getElementById('expense-description').value = expense.description;
+            document.getElementById('expense-amount').value = expense.amount;
             document.getElementById('expense-paid-by').value = expense.paidBy;
 
             // 3. Update the button text
-            document.getElementById('submit-expense-button').textContent = 'Update Expense'; [cite_start]// [cite: 34]
+            document.getElementById('submit-expense-button').textContent = 'Update Expense';
             // 4. Update the split-among checkboxes
             const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
-            [cite_start]splitCheckboxesDiv.innerHTML = members.map(m => { // [cite: 35]
+            splitCheckboxesDiv.innerHTML = members.map(m => {
                 const checked = expense.splitMembers.includes(m) ? 'checked' : '';
                 return `
                     <label>
                         <input type="checkbox" name="split-member" value="${m}" ${checked}> ${m}
-       
-                    [cite_start]</label> // [cite: 36]
+                    </label>
                 `;
             }).join('');
-            document.getElementById('expense-form').scrollIntoView({ behavior: 'smooth' }); [cite_start]// [cite: 37]
+            document.getElementById('expense-form').scrollIntoView({ behavior: 'smooth' });
         }
         
-        // --- Calculation Logic (Still uses local 'expenses' array, which is updated by Firebase) ---
+        // --- Calculation Logic ---
         
         function calculateSettlements() {
-            // ... (Your existing calculateSettlements code remains here)
             if (members.length === 0 || expenses.length === 0) {
-         
-                document.getElementById('results').innerHTML = '<p>Please add members and expenses first.</p>'; [cite_start]// [cite: 38]
+                document.getElementById('results').innerHTML = '<p>Please add members and expenses first.</p>';
                 return;
-            [cite_start]} // [cite: 39]
+            }
 
             // 1. Calculate net balance for each member
             const balances = {};
-            members.forEach(m => balances[m] = 0); [cite_start]// [cite: 40]
+            members.forEach(m => balances[m] = 0);
             
             expenses.forEach(exp => {
                 const amount = exp.amount;
@@ -280,40 +273,39 @@
                 const splitMembers = exp.splitMembers;
                 const splitAmount = amount / splitMembers.length;
 
-               
                 // Credit the payer (Paid By) with the total amount
-                [cite_start]balances[paidBy] += amount; // [cite: 41]
+                balances[paidBy] += amount;
 
                 // Debit each beneficiary (Split Among) by their share
                 splitMembers.forEach(member => {
                     balances[member] -= splitAmount;
-        
-                }); [cite_start]// [cite: 42]
+                });
             });
-            [cite_start]// 2. Prepare Results Display (Summary) [cite: 43]
+
+            // 2. Prepare Results Display (Summary)
             const summaryHTML = members.map(member => {
                 const balance = balances[member];
                 const typeClass = balance >= 0 ? 'owed' : 'owes';
                 const status = balance >= 0 ? 'is owed' : 'owes';
         
-                [cite_start]const absoluteBalance = Math.abs(balance).toFixed(2); // [cite: 44]
+                const absoluteBalance = Math.abs(balance).toFixed(2);
                 
                 return `
                     <div class="summary-item ${typeClass}">
                         <strong>${member}</strong> ${status} 
-        
-                        <strong>$${absoluteBalance}</strong> overall. [cite_start]// [cite: 45]
+                        <strong>$${absoluteBalance}</strong> overall.
                     </div>
                 `;
             }).join('');
-            [cite_start]// 3. Prepare Settlement Suggestions (Simplification Algorithm) [cite: 46]
+            
+            // 3. Prepare Settlement Suggestions (Simplification Algorithm)
             let creditors = members.filter(m => balances[m] > 0).sort((a, b) => balances[b] - balances[a]);
-            let debtors = members.filter(m => balances[m] < 0).sort((a, b) => balances[a] - balances[b]); [cite_start]// [cite: 47]
+            let debtors = members.filter(m => balances[m] < 0).sort((a, b) => balances[a] - balances[b]);
             
             const settlements = [];
-            [cite_start]while (debtors.length > 0 && creditors.length > 0) { // [cite: 48]
+            while (debtors.length > 0 && creditors.length > 0) {
                 const debtor = debtors[0];
-                const creditor = creditors[0]; [cite_start]// [cite: 49]
+                const creditor = creditors[0];
 
                 const amountToPay = Math.min(Math.abs(balances[debtor]), balances[creditor]);
                 
@@ -322,26 +314,25 @@
                     to: creditor,
                     amount: amountToPay
                 });
-                balances[debtor] += amountToPay; [cite_start]// [cite: 50]
+                balances[debtor] += amountToPay;
                 balances[creditor] -= amountToPay;
 
                 if (Math.abs(balances[debtor]) < 0.01) {
-                    debtors.shift(); [cite_start]// [cite: 51]
+                    debtors.shift();
                 }
                 if (Math.abs(balances[creditor]) < 0.01) {
-                    creditors.shift(); [cite_start]// [cite: 52]
+                    creditors.shift();
                 }
 
                 creditors.sort((a, b) => balances[b] - balances[a]);
-                debtors.sort((a, b) => balances[a] - balances[b]); [cite_start]// [cite: 53]
+                debtors.sort((a, b) => balances[a] - balances[b]);
             }
             
             const settlementHTML = settlements.map(s => `
                 <div class="settlement-item">
                     <strong>${s.from}</strong> pays <strong>$${s.amount.toFixed(2)}</strong> to <strong>${s.to}</strong>
                 </div>
-        
-            `).join(''); [cite_start]// [cite: 54]
+            `).join('');
 
 
             // 4. Final Display Update
@@ -349,10 +340,10 @@
                 <h3>Net Balances Summary</h3>
                 ${summaryHTML}
                 <h3 style="margin-top: 30px;">Recommended Settlements</h3>
-                ${settlementHTML ||
-                [cite_start]'<p>Everyone is settled up!</p>'} // [cite: 55]
+                ${settlementHTML || '<p>Everyone is settled up!</p>'}
             `;
-        [cite_start]} // [cite: 56]
+        }
+        
     </script>
 
 </body>
