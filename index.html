@@ -14,7 +14,10 @@
         #split-among-checkboxes label { display: inline-block; margin-right: 15px; font-weight: normal; }
         #expenses-list { list-style: none; padding: 0; }
         #expenses-list li { border-bottom: 1px dashed #eee; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; }
-        .expense-actions button { margin-left: 10px; padding: 5px 10px; cursor: pointer; }
+        .expense-actions button { margin-left: 10px; padding: 5px 10px; cursor: pointer; border: none; border-radius: 4px; }
+        .expense-actions button:hover { opacity: 0.8; }
+        .expense-actions button:nth-child(1) { /* Edit button */ background-color: #2196F3; color: white; }
+        .expense-actions button:nth-child(2) { /* Delete button */ background-color: #f44336; color: white; }
         
         /* Calculation Results Styling */
         .summary-item { padding: 10px; margin-top: 5px; border-radius: 4px; }
@@ -161,7 +164,7 @@
         // Setup listener for expenses
         expensesRef.on('value', (snapshot) => {
             expenses = [];
-            // We store the Firebase key along with the expense data for editing
+            // We store the Firebase key along with the expense data for editing/deleting
             snapshot.forEach((childSnapshot) => {
                 const expense = childSnapshot.val();
                 expense.key = childSnapshot.key; 
@@ -177,7 +180,7 @@
             const description = document.getElementById('expense-description').value;
             const amount = parseFloat(document.getElementById('expense-amount').value);
             const paidBy = document.getElementById('expense-paid-by').value;
-            const editKey = document.getElementById('edit-expense-index').value; // Now holds the Firebase key
+            const editKey = document.getElementById('edit-expense-index').value;
         
             const splitMembers = Array.from(document.querySelectorAll('input[name="split-member"]:checked'))
                 .map(input => input.value);
@@ -224,11 +227,27 @@
             
                     <span class="expense-actions">
                         <button onclick="editExpense(${index})">Edit</button>
+                        <button onclick="deleteExpense(${index})">Delete</button>
                     </span>
                 </li>
             `).join('');
         }
 
+        // --- New Delete Functionality ---
+        function deleteExpense(index) {
+            if (confirm(`Are you sure you want to delete the expense: ${expenses[index].description}?`)) {
+                const key = expenses[index].key;
+                expensesRef.child(key).remove()
+                    .then(() => {
+                        console.log("Expense deleted successfully.");
+                    })
+                    .catch((error) => {
+                        console.error("Error deleting expense:", error);
+                        alert("Failed to delete expense. Check console for details.");
+                    });
+            }
+        }
+        
         // --- Edit Functionality ---
 
         function editExpense(index) {
