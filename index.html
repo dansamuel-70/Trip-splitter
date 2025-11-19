@@ -1,36 +1,115 @@
-<script>
-        // =========================================================
-        // 1. ADD FIREBASE SDK SCRIPTS (Before your custom script)
-        // =========================================================
-    </script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Trip Splitter</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1, h2, h3 { color: #333; }
+        .container { border: 1px solid #ddd; padding: 20px; margin-bottom: 30px; border-radius: 8px; }
+        #members-list span { display: inline-block; background: #e0f7fa; padding: 5px 10px; margin: 5px; border-radius: 4px; }
+        #expense-form label { display: block; margin-top: 10px; font-weight: bold; }
+        #expense-form input, #expense-form select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
+        #split-among-checkboxes label { display: inline-block; margin-right: 15px; font-weight: normal; }
+        #expenses-list { list-style: none; padding: 0; }
+        #expenses-list li { border-bottom: 1px dashed #eee; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; }
+        .expense-actions button { margin-left: 10px; padding: 5px 10px; cursor: pointer; }
+        
+        /* Calculation Results Styling */
+        .summary-item { padding: 10px; margin-top: 5px; border-radius: 4px; }
+        .owed { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .owes { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .settlement-item { padding: 8px; margin-top: 5px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <h1>💰 Trip Expense Splitter</h1>
+    <p>Using Firebase Realtime Database to store members and expenses.</p>
+    
+    <div class="container">
+        <h2>👥 Manage Members</h2>
+        <div>
+            <input type="text" id="new-member-name" placeholder="Enter member name (e.g., Alice)">
+            <button onclick="addMember()">Add Member</button>
+        </div>
+
+        <h3>Current Members:</h3>
+        <div id="members-list">
+            <p>No members added yet.</p>
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>💸 Add/Edit Expense</h2>
+        <form id="expense-form">
+            <input type="hidden" id="edit-expense-index" value=""> 
+
+            <label for="expense-description">Description:</label>
+            <input type="text" id="expense-description" required>
+
+            <label for="expense-amount">Amount ($):</label>
+            <input type="number" id="expense-amount" step="0.01" min="0.01" required>
+
+            <label for="expense-paid-by">Paid By:</label>
+            <select id="expense-paid-by" required>
+                </select>
+
+            <label>Split Among:</label>
+            <div id="split-among-checkboxes">
+                <p>Please add members first.</p>
+            </div>
+            
+            <button type="submit" id="submit-expense-button" style="margin-top: 20px;">Add Expense</button>
+        </form>
+    </div>
+
+    <div class="container">
+        <h2>🧾 Expense History</h2>
+        <ul id="expenses-list">
+            <p>No expenses recorded yet.</p>
+        </ul>
+    </div>
+    
+    <div class="container">
+        <h2>📊 Balances & Settlements</h2>
+        <button onclick="calculateSettlements()">Calculate Settlements</button>
+        
+        <div id="results" style="margin-top: 15px;">
+            <p>Click 'Calculate Settlements' to see results.</p>
+        </div>
+    </div>
+
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-    <script>
 
+    <script>
+        [cite_start]// Your code starts here, including the placeholder config [cite: 2]
+        
         // =========================================================
         // 2. PASTE YOUR CONFIGURATION HERE
+        // ** IMPORTANT: REPLACE THIS ENTIRE OBJECT WITH YOUR REAL KEYS **
         // =========================================================
         const firebaseConfig = {
-            // !!! REPLACE THIS ENTIRE CONFIG OBJECT WITH YOUR REAL KEYS !!!
-            apiKey: "AIzaSyAXsCINHxQXYxTcge4Mp9St3XzeG4vZwjE",
-  	    authDomain: "trip-splitter-7d2ee.firebaseapp.com",
-  	    databaseURL: "https://trip-splitter-7d2ee-default-rtdb.firebaseio.com",
-  	    projectId: "trip-splitter-7d2ee",
-  	    storageBucket: "trip-splitter-7d2ee.firebasestorage.app",
-  	    messagingSenderId: "446178975806",
-  	    appId: "1:446178975806:web:9885d00d7f2af5a55d716f",
-  	    measurementId: "G-HS5GQ92RFY"
+            // !!! [cite_start]REPLACE THIS ENTIRE CONFIG OBJECT WITH YOUR REAL KEYS !!! [cite: 2]
+            [cite_start]apiKey: "AIzaSyAXsCINHxQXYxTcge4Mp9St3XzeG4vZwjE", // Placeholder [cite: 3]
+            authDomain: "trip-splitter-7d2ee.firebaseapp.com",
+            databaseURL: "https://trip-splitter-7d2ee-default-rtdb.firebaseio.com",
+            projectId: "trip-splitter-7d2ee",
+            storageBucket: "trip-splitter-7d2ee.firebasestorage.app",
+            messagingSenderId: "446178975806",
+            appId: "1:446178975806:web:9885d00d7f2af5a55d716f",
+            measurementId: "G-HS5GQ92RFY"
         };
-
-        // Initialize Firebase
+        [cite_start]// Initialize Firebase [cite: 4]
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        
-        // References for the database nodes
+        [cite_start]// References for the database nodes [cite: 5, 6]
         const membersRef = database.ref('members');
         const expensesRef = database.ref('expenses');
 
-        // Local arrays will now be populated by Firebase listeners
+        [cite_start]// Local arrays will now be populated by Firebase listeners [cite: 7]
         let members = [];
         let expenses = [];
         
@@ -42,41 +121,41 @@
             snapshot.forEach((childSnapshot) => {
                 members.push(childSnapshot.val());
             });
-            updateUIElements();
+ 
+            [cite_start]updateUIElements(); // [cite: 8]
             console.log("Members loaded from Firebase.");
         });
-
-        function addMember() {
+        [cite_start]function addMember() { // [cite: 9]
             const nameInput = document.getElementById('new-member-name');
-            const name = nameInput.value.trim();
+            const name = nameInput.value.trim(); [cite_start]// [cite: 10]
             if (name && !members.includes(name)) {
                 // WRITE to Firebase
                 membersRef.child(name).set(name) 
                 nameInput.value = '';
-            }
+            [cite_start]} // [cite: 11]
         }
         
         // updateUIElements remains largely the same, but only rebuilds UI
         function updateUIElements() {
             // ... (Your existing updateUIElements code remains here)
             const membersListDiv = document.getElementById('members-list');
-            membersListDiv.innerHTML = members.map(m => `<span>${m}</span>`).join('');
+            membersListDiv.innerHTML = members.map(m => `<span>${m}</span>`).join(''); [cite_start]// [cite: 12]
 
             const paidBySelect = document.getElementById('expense-paid-by');
             paidBySelect.innerHTML = members.map(m => `<option value="${m}">${m}</option>`).join('');
             
             const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
-            if (members.length > 0) {
+            [cite_start]if (members.length > 0) { // [cite: 13]
                 // This clears the innerHTML completely and rebuilds the checklist
                 splitCheckboxesDiv.innerHTML = members.map(m => `
                     <label>
                         <input type="checkbox" name="split-member" value="${m}" checked> ${m}
-                    </label>
+                    [cite_start]</label> // [cite: 14]
                 `).join('');
-            } else {
-                splitCheckboxesDiv.innerHTML = '<p>Please add members first.</p>';
+            [cite_start]} else { // [cite: 15]
+                splitCheckboxesDiv.innerHTML = '<p>Please add members first.</p>'; [cite_start]// [cite: 16]
             }
-            updateExpensesList(); 
+            updateExpensesList(); [cite_start]// [cite: 17]
         }
 
         // --- Expense Management (UPDATED TO USE FIREBASE) ---
@@ -86,98 +165,99 @@
             expenses = [];
             // We store the Firebase key along with the expense data for editing
             snapshot.forEach((childSnapshot) => {
-                const expense = childSnapshot.val();
+         
+                [cite_start]const expense = childSnapshot.val(); // [cite: 18]
                 expense.key = childSnapshot.key; 
                 expenses.push(expense);
             });
             updateExpensesList();
             console.log("Expenses loaded from Firebase.");
         });
-        
-        document.getElementById('expense-form').addEventListener('submit', function(e) {
+        [cite_start]document.getElementById('expense-form').addEventListener('submit', function(e) { // [cite: 19]
             e.preventDefault();
             
             const description = document.getElementById('expense-description').value;
             const amount = parseFloat(document.getElementById('expense-amount').value);
             const paidBy = document.getElementById('expense-paid-by').value;
             const editKey = document.getElementById('edit-expense-index').value; // Now holds the Firebase key
-            
+        
             const splitMembers = Array.from(document.querySelectorAll('input[name="split-member"]:checked'))
-                .map(input => input.value);
+                .map(input => input.value); [cite_start]// [cite: 20]
 
             if (splitMembers.length === 0) {
                 alert('Please select at least one person to split the expense among.');
                 return;
-            }
+     
+            [cite_start]} // [cite: 21]
             
             const expenseData = {
                 description,
                 amount,
                 paidBy,
                 splitMembers
-            };
-            
-            if (editKey !== '') {
+  
+            }; [cite_start]// [cite: 22]
+            [cite_start]if (editKey !== '') { // [cite: 23]
                 // EDIT MODE: Update existing expense in Firebase
                 expensesRef.child(editKey).update(expenseData);
-                alert('Expense updated!');
+                alert('Expense updated!'); [cite_start]// [cite: 24]
             } else {
                 // ADD MODE: Push new expense to Firebase
                 expensesRef.push(expenseData);
-                alert('Expense added!');
+                alert('Expense added!'); [cite_start]// [cite: 25]
             }
 
             // Reset form
             document.getElementById('expense-form').reset();
-            document.getElementById('edit-expense-index').value = '';
+            document.getElementById('edit-expense-index').value = ''; [cite_start]// [cite: 26]
             document.getElementById('submit-expense-button').textContent = 'Add Expense';
             document.querySelectorAll('input[name="split-member"]').forEach(checkbox => {
                 checkbox.checked = true;
             });
-        });
+        }); [cite_start]// [cite: 27]
         
         function updateExpensesList() {
             const expensesListUl = document.getElementById('expenses-list');
-            expensesListUl.innerHTML = expenses.map((exp, index) => `
+            [cite_start]expensesListUl.innerHTML = expenses.map((exp, index) => ` // [cite: 28]
                 <li>
-                    <strong>${exp.description}: $${exp.amount.toFixed(2)}</strong>
-                    <br>
-                    Paid by: ${exp.paidBy}. Split among: ${exp.splitMembers.join(', ')}.
+                    <div>
+                        <strong>${exp.description}: $${exp.amount.toFixed(2)}</strong>
+                        <br>
+                        Paid by: ${exp.paidBy}. Split among: ${exp.splitMembers.join(', ')}.
+                    </div>
+            
                     <span class="expense-actions">
-                        <button onclick="editExpense(${index})">Edit</button>
+                        [cite_start]<button onclick="editExpense(${index})">Edit</button> // [cite: 29]
                     </span>
                 </li>
-            `).join('');
+            `).join(''); [cite_start]// [cite: 30]
         }
 
         // --- Edit Functionality (UPDATED TO USE INDEX TO FIND KEY) ---
 
         function editExpense(index) {
             const expense = expenses[index];
-            
             // 1. Fill the hidden index input with the Firebase key
-            document.getElementById('edit-expense-index').value = expense.key;
-
+            document.getElementById('edit-expense-index').value = expense.key; [cite_start]// [cite: 31]
             // 2. Populate form fields
-            document.getElementById('expense-description').value = expense.description;
-            document.getElementById('expense-amount').value = expense.amount;
+            document.getElementById('expense-description').value = expense.description; [cite_start]// [cite: 32]
+            document.getElementById('expense-amount').value = expense.amount; [cite_start]// [cite: 33]
             document.getElementById('expense-paid-by').value = expense.paidBy;
 
             // 3. Update the button text
-            document.getElementById('submit-expense-button').textContent = 'Update Expense';
-
+            document.getElementById('submit-expense-button').textContent = 'Update Expense'; [cite_start]// [cite: 34]
             // 4. Update the split-among checkboxes
             const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
-            splitCheckboxesDiv.innerHTML = members.map(m => {
+            [cite_start]splitCheckboxesDiv.innerHTML = members.map(m => { // [cite: 35]
                 const checked = expense.splitMembers.includes(m) ? 'checked' : '';
                 return `
                     <label>
                         <input type="checkbox" name="split-member" value="${m}" ${checked}> ${m}
-                    </label>
+       
+                    [cite_start]</label> // [cite: 36]
                 `;
             }).join('');
-            
-            document.getElementById('expense-form').scrollIntoView({ behavior: 'smooth' });
+            document.getElementById('expense-form').scrollIntoView({ behavior: 'smooth' }); [cite_start]// [cite: 37]
         }
         
         // --- Calculation Logic (Still uses local 'expenses' array, which is updated by Firebase) ---
@@ -185,13 +265,14 @@
         function calculateSettlements() {
             // ... (Your existing calculateSettlements code remains here)
             if (members.length === 0 || expenses.length === 0) {
-                document.getElementById('results').innerHTML = '<p>Please add members and expenses first.</p>';
+         
+                document.getElementById('results').innerHTML = '<p>Please add members and expenses first.</p>'; [cite_start]// [cite: 38]
                 return;
-            }
+            [cite_start]} // [cite: 39]
 
             // 1. Calculate net balance for each member
             const balances = {};
-            members.forEach(m => balances[m] = 0);
+            members.forEach(m => balances[m] = 0); [cite_start]// [cite: 40]
             
             expenses.forEach(exp => {
                 const amount = exp.amount;
@@ -199,39 +280,40 @@
                 const splitMembers = exp.splitMembers;
                 const splitAmount = amount / splitMembers.length;
 
+               
                 // Credit the payer (Paid By) with the total amount
-                balances[paidBy] += amount;
+                [cite_start]balances[paidBy] += amount; // [cite: 41]
 
                 // Debit each beneficiary (Split Among) by their share
                 splitMembers.forEach(member => {
                     balances[member] -= splitAmount;
-                });
+        
+                }); [cite_start]// [cite: 42]
             });
-
-            // 2. Prepare Results Display (Summary)
+            [cite_start]// 2. Prepare Results Display (Summary) [cite: 43]
             const summaryHTML = members.map(member => {
                 const balance = balances[member];
                 const typeClass = balance >= 0 ? 'owed' : 'owes';
                 const status = balance >= 0 ? 'is owed' : 'owes';
-                const absoluteBalance = Math.abs(balance).toFixed(2);
+        
+                [cite_start]const absoluteBalance = Math.abs(balance).toFixed(2); // [cite: 44]
                 
                 return `
                     <div class="summary-item ${typeClass}">
                         <strong>${member}</strong> ${status} 
-                        <strong>$${absoluteBalance}</strong> overall.
+        
+                        <strong>$${absoluteBalance}</strong> overall. [cite_start]// [cite: 45]
                     </div>
                 `;
             }).join('');
-            
-            // 3. Prepare Settlement Suggestions (Simplification Algorithm)
+            [cite_start]// 3. Prepare Settlement Suggestions (Simplification Algorithm) [cite: 46]
             let creditors = members.filter(m => balances[m] > 0).sort((a, b) => balances[b] - balances[a]);
-            let debtors = members.filter(m => balances[m] < 0).sort((a, b) => balances[a] - balances[b]);
+            let debtors = members.filter(m => balances[m] < 0).sort((a, b) => balances[a] - balances[b]); [cite_start]// [cite: 47]
             
             const settlements = [];
-            
-            while (debtors.length > 0 && creditors.length > 0) {
+            [cite_start]while (debtors.length > 0 && creditors.length > 0) { // [cite: 48]
                 const debtor = debtors[0];
-                const creditor = creditors[0];
+                const creditor = creditors[0]; [cite_start]// [cite: 49]
 
                 const amountToPay = Math.min(Math.abs(balances[debtor]), balances[creditor]);
                 
@@ -240,26 +322,26 @@
                     to: creditor,
                     amount: amountToPay
                 });
-
-                balances[debtor] += amountToPay;
+                balances[debtor] += amountToPay; [cite_start]// [cite: 50]
                 balances[creditor] -= amountToPay;
 
                 if (Math.abs(balances[debtor]) < 0.01) {
-                    debtors.shift();
+                    debtors.shift(); [cite_start]// [cite: 51]
                 }
                 if (Math.abs(balances[creditor]) < 0.01) {
-                    creditors.shift();
+                    creditors.shift(); [cite_start]// [cite: 52]
                 }
 
                 creditors.sort((a, b) => balances[b] - balances[a]);
-                debtors.sort((a, b) => balances[a] - balances[b]);
+                debtors.sort((a, b) => balances[a] - balances[b]); [cite_start]// [cite: 53]
             }
             
             const settlementHTML = settlements.map(s => `
                 <div class="settlement-item">
                     <strong>${s.from}</strong> pays <strong>$${s.amount.toFixed(2)}</strong> to <strong>${s.to}</strong>
                 </div>
-            `).join('');
+        
+            `).join(''); [cite_start]// [cite: 54]
 
 
             // 4. Final Display Update
@@ -267,8 +349,11 @@
                 <h3>Net Balances Summary</h3>
                 ${summaryHTML}
                 <h3 style="margin-top: 30px;">Recommended Settlements</h3>
-                ${settlementHTML || '<p>Everyone is settled up!</p>'}
+                ${settlementHTML ||
+                [cite_start]'<p>Everyone is settled up!</p>'} // [cite: 55]
             `;
-        }
-        
+        [cite_start]} // [cite: 56]
     </script>
+
+</body>
+</html>
