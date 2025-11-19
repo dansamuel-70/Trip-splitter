@@ -24,72 +24,95 @@
         .owed { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .owes { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .settlement-item { padding: 8px; margin-top: 5px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; }
+
+        /* Trip Selector Styling */
+        #trip-selector-container, #new-trip-container { display: flex; align-items: center; margin-bottom: 20px; }
+        #trip-selector-container label { margin-right: 10px; }
+        #new-trip-name { flex-grow: 1; margin-right: 10px; padding: 8px; }
     </style>
 </head>
 <body>
 
-    <h1>💰 Trip Expense Splitter</h1>
-    <p>Using Firebase Realtime Database to store members and expenses.</p>
+    <h1>🌎 Trip Expense Splitter</h1>
     
     <div class="container">
-        <h2>👥 Manage Members</h2>
-        <div>
-            <input type="text" id="new-member-name" placeholder="Enter member name (e.g., Alice)">
-            <button onclick="addMember()">Add Member</button>
-        </div>
-
-        <h3>Current Members:</h3>
-        <div id="members-list">
-            <p>No members added yet.</p>
-        </div>
-    </div>
-    
-    <div class="container">
-        <h2>💸 Add/Edit Expense</h2>
-        <form id="expense-form">
-            <input type="hidden" id="edit-expense-index" value=""> 
-
-            <label for="expense-description">Description:</label>
-            <input type="text" id="expense-description" required>
-
-            <label for="expense-amount">Amount ($):</label>
-            <input type="number" id="expense-amount" step="0.01" min="0.01" required>
-
-            <label for="expense-paid-by">Paid By:</label>
-            <select id="expense-paid-by" required>
-                </select>
-
-            <label>Split Among:</label>
-            <div id="split-among-checkboxes">
-                <p>Please add members first.</p>
-            </div>
-            
-            <button type="submit" id="submit-expense-button" style="margin-top: 20px;">Add Expense</button>
-        </form>
-    </div>
-
-    <div class="container">
-        <h2>🧾 Expense History</h2>
-        <ul id="expenses-list">
-            <p>No expenses recorded yet.</p>
-        </ul>
-    </div>
-    
-    <div class="container">
-        <h2>📊 Balances & Settlements</h2>
-        <button onclick="calculateSettlements()">Calculate Settlements</button>
+        <h2>✈️ Select/Create Trip</h2>
         
-        <div id="results" style="margin-top: 15px;">
-            <p>Click 'Calculate Settlements' to see results.</p>
+        <div id="new-trip-container">
+            <input type="text" id="new-trip-name" placeholder="Enter new trip name (e.g., Summer Holiday)">
+            <button onclick="createTrip()">Create Trip</button>
+        </div>
+
+        <div id="trip-selector-container">
+            <label for="trip-selector">Active Trip:</label>
+            <select id="trip-selector" onchange="changeActiveTrip(this.value)">
+                <option value="" disabled selected>-- Select a Trip --</option>
+            </select>
         </div>
     </div>
+
+    <div id="app-content" style="opacity: 0.5; pointer-events: none;">
+        <div class="container">
+            <h2>👥 Manage Members for <span id="current-trip-name">Current Trip</span></h2>
+            <div>
+                <input type="text" id="new-member-name" placeholder="Enter member name (e.g., Alice)">
+                <button onclick="addMember()">Add Member</button>
+            </div>
+
+            <h3>Current Members:</h3>
+            <div id="members-list">
+                <p>No members added yet.</p>
+            </div>
+        </div>
+        
+        <div class="container">
+            <h2>💸 Add/Edit Expense</h2>
+            <form id="expense-form">
+                <input type="hidden" id="edit-expense-index" value=""> 
+
+                <label for="expense-description">Description:</label>
+                <input type="text" id="expense-description" required>
+
+                <label for="expense-amount">Amount ($):</label>
+                <input type="number" id="expense-amount" step="0.01" min="0.01" required>
+
+                <label for="expense-paid-by">Paid By:</label>
+                <select id="expense-paid-by" required>
+                    </select>
+
+                <label>Split Among:</label>
+                <div id="split-among-checkboxes">
+                    <p>Please add members first.</p>
+                </div>
+                
+                <button type="submit" id="submit-expense-button" style="margin-top: 20px;">Add Expense</button>
+            </form>
+        </div>
+
+        <div class="container">
+            <h2>🧾 Expense History</h2>
+            <ul id="expenses-list">
+                <p>No expenses recorded yet.</p>
+            </ul>
+        </div>
+        
+        <div class="container">
+            <h2>📊 Balances & Settlements</h2>
+            <button onclick="calculateSettlements()">Calculate Settlements</button>
+            
+            <div id="results" style="margin-top: 15px;">
+                <p>Click 'Calculate Settlements' to see results.</p>
+            </div>
+        </div>
+    </div>
+
 
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
     <script>
         // =========================================================
-        // 1. PASTE YOUR CONFIGURATION HERE
+        // 1. FIREBASE CONFIGURATION
         // ** IMPORTANT: REPLACE THIS ENTIRE OBJECT WITH YOUR REAL KEYS **
         // =========================================================
         const firebaseConfig = {
@@ -107,33 +130,136 @@
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        // References for the database nodes
-        const membersRef = database.ref('members');
-        const expensesRef = database.ref('expenses');
+        
+        // --- GLOBAL REFERENCES & STATE ---
+        const tripsRef = database.ref('trips');
+        let activeTripKey = null;
+        let allTrips = {}; // {key: {name: '...', expenses: [], members: []}}
 
-        // Local arrays will now be populated by Firebase listeners
+        // Local arrays will now be trip-specific
         let members = [];
         let expenses = [];
         
-        // --- Member Management ---
+        // --- 0. TRIP MANAGEMENT ---
+
+        // Setup listener for ALL trips
+        tripsRef.on('value', (snapshot) => {
+            allTrips = {};
+            snapshot.forEach((childSnapshot) => {
+                const tripData = childSnapshot.val();
+                const key = childSnapshot.key;
+                allTrips[key] = {
+                    key: key,
+                    name: tripData.name,
+                };
+            });
+            updateTripSelectorUI();
+            
+            // If no active trip is selected, try to select the first one
+            if (!activeTripKey && Object.keys(allTrips).length > 0) {
+                changeActiveTrip(Object.keys(allTrips)[0]);
+            }
+        });
+
+        function updateTripSelectorUI() {
+            const selector = document.getElementById('trip-selector');
+            selector.innerHTML = '<option value="" disabled>-- Select a Trip --</option>';
+
+            const sortedTripKeys = Object.keys(allTrips).sort((a, b) => allTrips[a].name.localeCompare(allTrips[b].name));
+            
+            sortedTripKeys.forEach(key => {
+                const trip = allTrips[key];
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = trip.name;
+                if (key === activeTripKey) {
+                    option.selected = true;
+                }
+                selector.appendChild(option);
+            });
+        }
+
+        function createTrip() {
+            const nameInput = document.getElementById('new-trip-name');
+            const name = nameInput.value.trim();
+            if (!name) {
+                alert("Please enter a name for the new trip.");
+                return;
+            }
+
+            // Push the new trip data
+            tripsRef.push({ name: name, createdAt: firebase.database.ServerValue.TIMESTAMP })
+                .then(newTripRef => {
+                    nameInput.value = '';
+                    changeActiveTrip(newTripRef.key);
+                })
+                .catch(error => {
+                    console.error("Error creating trip:", error);
+                });
+        }
+
+        // Switches the active trip, and re-attaches Firebase listeners
+        function changeActiveTrip(tripKey) {
+            activeTripKey = tripKey;
+            
+            if (tripKey) {
+                const tripName = allTrips[tripKey].name;
+                document.getElementById('current-trip-name').textContent = tripName;
+                document.getElementById('app-content').style.opacity = '1';
+                document.getElementById('app-content').style.pointerEvents = 'auto';
+
+                // 1. Setup NEW Members Listener for the new trip
+                const membersTripRef = database.ref(`trips/${tripKey}/members`);
+                membersTripRef.on('value', handleMembersSnapshot);
+
+                // 2. Setup NEW Expenses Listener for the new trip
+                const expensesTripRef = database.ref(`trips/${tripKey}/expenses`);
+                expensesTripRef.on('value', handleExpensesSnapshot);
+
+                console.log(`Active Trip switched to: ${tripName}`);
+            } else {
+                // No trip selected
+                document.getElementById('current-trip-name').textContent = 'None Selected';
+                document.getElementById('app-content').style.opacity = '0.5';
+                document.getElementById('app-content').style.pointerEvents = 'none';
+                members = [];
+                expenses = [];
+                updateUIElements();
+            }
+        }
+
+        // --- HANDLERS for Firebase Snapshots ---
         
-        // Setup listener for members
-        membersRef.on('value', (snapshot) => {
+        function handleMembersSnapshot(snapshot) {
             members = [];
             snapshot.forEach((childSnapshot) => {
                 members.push(childSnapshot.val());
             });
- 
             updateUIElements();
-            console.log("Members loaded from Firebase.");
-        });
+        }
 
+        function handleExpensesSnapshot(snapshot) {
+            expenses = [];
+            snapshot.forEach((childSnapshot) => {
+                const expense = childSnapshot.val();
+                expense.key = childSnapshot.key; 
+                expenses.push(expense);
+            });
+            updateExpensesList();
+        }
+        
+        // --- 1. MEMBER MANAGEMENT ---
+        
         function addMember() {
+            if (!activeTripKey) return alert("Please select a trip first.");
+
             const nameInput = document.getElementById('new-member-name');
             const name = nameInput.value.trim();
+            
             if (name && !members.includes(name)) {
-                // WRITE to Firebase
-                membersRef.child(name).set(name) 
+                const membersTripRef = database.ref(`trips/${activeTripKey}/members`);
+                // Use the name as the key for simplicity in the members node
+                membersTripRef.child(name).set(name) 
                 nameInput.value = '';
             }
         }
@@ -147,7 +273,6 @@
             
             const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
             if (members.length > 0) {
-                // This clears the innerHTML completely and rebuilds the checklist
                 splitCheckboxesDiv.innerHTML = members.map(m => `
                     <label>
                         <input type="checkbox" name="split-member" value="${m}" checked> ${m}
@@ -159,23 +284,11 @@
             updateExpensesList();
         }
 
-        // --- Expense Management ---
-
-        // Setup listener for expenses
-        expensesRef.on('value', (snapshot) => {
-            expenses = [];
-            // We store the Firebase key along with the expense data for editing/deleting
-            snapshot.forEach((childSnapshot) => {
-                const expense = childSnapshot.val();
-                expense.key = childSnapshot.key; 
-                expenses.push(expense);
-            });
-            updateExpensesList();
-            console.log("Expenses loaded from Firebase.");
-        });
+        // --- 2 & 3. EXPENSE MANAGEMENT & LIST ---
 
         document.getElementById('expense-form').addEventListener('submit', function(e) {
             e.preventDefault();
+            if (!activeTripKey) return alert("Please select a trip first.");
             
             const description = document.getElementById('expense-description').value;
             const amount = parseFloat(document.getElementById('expense-amount').value);
@@ -194,15 +307,19 @@
                 description,
                 amount,
                 paidBy,
-                splitMembers
+                splitMembers,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
             };
+
+            const expensesTripRef = database.ref(`trips/${activeTripKey}/expenses`);
+
             if (editKey !== '') {
-                // EDIT MODE: Update existing expense in Firebase
-                expensesRef.child(editKey).update(expenseData);
+                // EDIT MODE
+                expensesTripRef.child(editKey).update(expenseData);
                 alert('Expense updated!');
             } else {
-                // ADD MODE: Push new expense to Firebase
-                expensesRef.push(expenseData);
+                // ADD MODE
+                expensesTripRef.push(expenseData);
                 alert('Expense added!');
             }
 
@@ -233,11 +350,13 @@
             `).join('');
         }
 
-        // --- New Delete Functionality ---
         function deleteExpense(index) {
+            if (!activeTripKey) return;
             if (confirm(`Are you sure you want to delete the expense: ${expenses[index].description}?`)) {
                 const key = expenses[index].key;
-                expensesRef.child(key).remove()
+                const expensesTripRef = database.ref(`trips/${activeTripKey}/expenses`);
+
+                expensesTripRef.child(key).remove()
                     .then(() => {
                         console.log("Expense deleted successfully.");
                     })
@@ -248,20 +367,14 @@
             }
         }
         
-        // --- Edit Functionality ---
-
         function editExpense(index) {
             const expense = expenses[index];
-            // 1. Fill the hidden index input with the Firebase key
             document.getElementById('edit-expense-index').value = expense.key;
-            // 2. Populate form fields
             document.getElementById('expense-description').value = expense.description;
             document.getElementById('expense-amount').value = expense.amount;
             document.getElementById('expense-paid-by').value = expense.paidBy;
-
-            // 3. Update the button text
             document.getElementById('submit-expense-button').textContent = 'Update Expense';
-            // 4. Update the split-among checkboxes
+
             const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
             splitCheckboxesDiv.innerHTML = members.map(m => {
                 const checked = expense.splitMembers.includes(m) ? 'checked' : '';
@@ -274,9 +387,11 @@
             document.getElementById('expense-form').scrollIntoView({ behavior: 'smooth' });
         }
         
-        // --- Calculation Logic ---
+        // --- 4. CALCULATION LOGIC ---
         
         function calculateSettlements() {
+            if (!activeTripKey) return alert("Please select a trip first.");
+
             if (members.length === 0 || expenses.length === 0) {
                 document.getElementById('results').innerHTML = '<p>Please add members and expenses first.</p>';
                 return;
@@ -292,10 +407,8 @@
                 const splitMembers = exp.splitMembers;
                 const splitAmount = amount / splitMembers.length;
 
-                // Credit the payer (Paid By) with the total amount
                 balances[paidBy] += amount;
 
-                // Debit each beneficiary (Split Among) by their share
                 splitMembers.forEach(member => {
                     balances[member] -= splitAmount;
                 });
@@ -306,7 +419,6 @@
                 const balance = balances[member];
                 const typeClass = balance >= 0 ? 'owed' : 'owes';
                 const status = balance >= 0 ? 'is owed' : 'owes';
-        
                 const absoluteBalance = Math.abs(balance).toFixed(2);
                 
                 return `
@@ -353,7 +465,6 @@
                 </div>
             `).join('');
 
-
             // 4. Final Display Update
             document.getElementById('results').innerHTML = `
                 <h3>Net Balances Summary</h3>
@@ -362,7 +473,6 @@
                 ${settlementHTML || '<p>Everyone is settled up!</p>'}
             `;
         }
-        
     </script>
 
 </body>
