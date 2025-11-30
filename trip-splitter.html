@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Trip Splitter</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1, h2, h3 { color: #333; }
+        .container { border: 1px solid #ddd; padding: 20px; margin-bottom: 30px; border-radius: 8px; }
+        #members-list span { display: inline-block; background: #e0f7fa; padding: 5px 10px; margin: 5px; border-radius: 4px; }
+        #expense-form label { display: block; margin-top: 10px; font-weight: bold; }
+        #expense-form input, #expense-form select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
+        #split-among-checkboxes label { display: inline-block; margin-right: 15px; font-weight: normal; }
+        #expenses-list { list-style: none; padding: 0; }
+        #expenses-list li { border-bottom: 1px dashed #eee; padding: 10px 0; display: flex; justify-content: space-between; align-items: center; }
+        .expense-actions button { margin-left: 10px; padding: 5px 10px; cursor: pointer; border: none; border-radius: 4px; }
+        .expense-actions button:hover { opacity: 0.8; }
+        .expense-actions button:nth-child(1) { background-color: #2196F3; color: white; }
+        .expense-actions button:nth-child(2) { background-color: #f44336; color: white; }
+        
+        .summary-item { padding: 10px; margin-top: 5px; border-radius: 4px; }
+        .owed { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .owes { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .settlement-item { padding: 8px; margin-top: 5px; background: #fff3cd; border: 1px solid #ffeeba; border-radius: 4px; }
+
+        #trip-selector-container, #new-trip-container { display: flex; align-items: center; margin-bottom: 20px; }
+        #trip-selector-container label { margin-right: 10px; }
+        #new-trip-name { flex-grow: 1; margin-right: 10px; padding: 8px; }
+        
+        /* Auth Styling */
+        #auth-container { background: #f0f0f0; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+        #admin-login-form { display: inline-flex; gap: 10px; align-items: center; }
+        #admin-password { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .status-badge { display: inline-block; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-left: 10px; }
+        .admin-badge { background: #4CAF50; color: white; }
+        .user-badge { background: #2196F3; color: white; }
+        
+        /* Trip Actions */
+        .trip-actions { margin-left: 10px; }
+        .trip-actions button { padding: 5px 10px; margin-left: 5px; border: none; border-radius: 4px; cursor: pointer; }
+        .edit-trip-btn { background: #2196F3; color: white; }
+        .delete-trip-btn { background: #f44336; color: white; }
+        .lock-btn { background: #FF9800; color: white; }
+        .unlock-btn { background: #4CAF50; color: white; }
+        
+        .locked-notice { background: #fff3cd; padding: 10px; border-radius: 4px; border: 1px solid #ffeeba; margin-bottom: 15px; }
+        .admin-only { opacity: 0.6; }
+    </style>
+</head>
+<body>
+
+    <h1>🌎 Trip Expense Splitter</h1>
+    
+    <!-- Authentication Section -->
+    <div id="auth-container">
+        <div id="auth-status">Loading...</div>
+    </div>
+
+    <div class="container">
+        <h2>✈️ Select/Create Trip</h2>
+        
+        <div id="new-trip-container" style="display: none;">
+            <input type="text" id="new-trip-name" placeholder="Enter new trip name (e.g., Summer Holiday)">
+            <button onclick="createTrip()">Create Trip</button>
+        </div>
+
+        <div id="trip-selector-container">
+            <label for="trip-selector">Active Trip:</label>
+            <select id="trip-selector" onchange="changeActiveTrip(this.value)">
+                <option value="" disabled selected>-- Select a Trip --</option>
+            </select>
+            <span id="trip-actions-container"></span>
+        </div>
+    </div>
+
+    <div id="locked-notice" class="locked-notice" style="display: none;">
+        🔒 This trip is locked. Only the administrator can make changes.
+    </div>
+
+    <div id="app-content" style="opacity: 0.5; pointer-events: none;">
+        <div class="container">
+            <h2>👥 Manage Members for <span id="current-trip-name">Current Trip</span></h2>
+            <div>
+                <input type="text" id="new-member-name" placeholder="Enter member name (e.g., Alice)">
+                <button onclick="addMember()">Add Member</button>
+            </div>
+
+            <h3>Current Members:</h3>
+            <div id="members-list">
+                <p>No members added yet.</p>
+            </div>
+        </div>
+        
+        <div class="container">
+            <h2>💸 Add/Edit Expense</h2>
+            <form id="expense-form">
+                <input type="hidden" id="edit-expense-index" value=""> 
+
+                <label for="expense-description">Description:</label>
+                <input type="text" id="expense-description" required>
+
+                <label for="expense-amount">Amount ($):</label>
+                <input type="number" id="expense-amount" step="0.01" min="0.01" required>
+
+                <label for="expense-paid-by">Paid By:</label>
+                <select id="expense-paid-by" required></select>
+
+                <label>Split Among:</label>
+                <div id="split-among-checkboxes">
+                    <p>Please add members first.</p>
+                </div>
+                
+                <button type="submit" id="submit-expense-button" style="margin-top: 20px;">Add Expense</button>
+            </form>
+        </div>
+
+        <div class="container">
+            <h2>🧾 Expense History</h2>
+            <ul id="expenses-list">
+                <p>No expenses recorded yet.</p>
+            </ul>
+        </div>
+        
+        <div class="container">
+            <h2>📊 Balances & Settlements</h2>
+            <button onclick="calculateSettlements()">Calculate Settlements</button>
+            
+            <div id="results" style="margin-top: 15px;">
+                <p>Click 'Calculate Settlements' to see results.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+
+    <script>
+        // =========================================================
+        // FIREBASE CONFIGURATION
+        // =========================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyAXsCINHxQXYxTcge4Mp9St3XzeG4vZwjE",
+            authDomain: "trip-splitter-7d2ee.firebaseapp.com",
+            databaseURL: "https://trip-splitter-7d2ee-default-rtdb.firebaseio.com",
+            projectId: "trip-splitter-7d2ee",
+            storageBucket: "trip-splitter-7d2ee.firebasestorage.app",
+            messagingSenderId: "446178975806",
+            appId: "1:446178975806:web:9885d00d7f2af5a55d716f",
+            measurementId: "G-HS5GQ92RFY"
+        };
+
+        const ADMIN_PASSWORD = "tr1psplitter8080";
+
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const auth = firebase.auth();
+        
+        // Global state
+        const tripsRef = database.ref('trips');
+        let activeTripKey = null;
+        let allTrips = {};
+        let members = [];
+        let expenses = [];
+        let currentUser = null;
+        let isAdmin = false;
+        let currentTripLocked = false;
+
+        // =========================================================
+        // AUTHENTICATION
+        // =========================================================
+        
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                currentUser = user;
+                checkAdminStatus();
+            } else {
+                // Sign in anonymously
+                auth.signInAnonymously().catch(error => {
+                    console.error("Auth error:", error);
+                });
+            }
+        });
+
+        function checkAdminStatus() {
+            const adminRef = database.ref(`admins/${currentUser.uid}`);
+            adminRef.once('value').then(snapshot => {
+                isAdmin = snapshot.exists() && snapshot.val() === true;
+                updateAuthUI();
+            });
+        }
+
+        function updateAuthUI() {
+            const authStatus = document.getElementById('auth-status');
+            const newTripContainer = document.getElementById('new-trip-container');
+            
+            if (isAdmin) {
+                authStatus.innerHTML = `
+                    <span>Logged in as: <strong>Administrator</strong></span>
+                    <span class="status-badge admin-badge">ADMIN</span>
+                    <button onclick="logoutAdmin()" style="margin-left: 15px; padding: 5px 15px; border: none; border-radius: 4px; background: #f44336; color: white; cursor: pointer;">Logout</button>
+                `;
+                newTripContainer.style.display = 'flex';
+            } else {
+                authStatus.innerHTML = `
+                    <span>Viewing as: <strong>Guest</strong></span>
+                    <span class="status-badge user-badge">GUEST</span>
+                    <button onclick="showAdminLogin()" style="margin-left: 15px; padding: 5px 15px; border: none; border-radius: 4px; background: #4CAF50; color: white; cursor: pointer;">Admin Login</button>
+                `;
+                newTripContainer.style.display = 'none';
+            }
+        }
+
+        function showAdminLogin() {
+            const password = prompt("Enter admin password:");
+            if (password === ADMIN_PASSWORD) {
+                database.ref(`admins/${currentUser.uid}`).set(true).then(() => {
+                    isAdmin = true;
+                    updateAuthUI();
+                    alert("Admin login successful!");
+                });
+            } else if (password !== null) {
+                alert("Incorrect password!");
+            }
+        }
+
+        function logoutAdmin() {
+            if (confirm("Logout as administrator?")) {
+                database.ref(`admins/${currentUser.uid}`).remove().then(() => {
+                    isAdmin = false;
+                    updateAuthUI();
+                    if (activeTripKey) {
+                        changeActiveTrip(activeTripKey); // Refresh to update UI
+                    }
+                });
+            }
+        }
+
+        // =========================================================
+        // TRIP MANAGEMENT
+        // =========================================================
+
+        tripsRef.on('value', (snapshot) => {
+            allTrips = {};
+            snapshot.forEach((childSnapshot) => {
+                const tripData = childSnapshot.val();
+                const key = childSnapshot.key;
+                allTrips[key] = {
+                    key: key,
+                    name: tripData.name,
+                    locked: tripData.locked || false,
+                    createdBy: tripData.createdBy || 'legacy'
+                };
+            });
+            updateTripSelectorUI();
+            
+            if (!activeTripKey && Object.keys(allTrips).length > 0) {
+                changeActiveTrip(Object.keys(allTrips)[0]);
+            }
+        });
+
+        function updateTripSelectorUI() {
+            const selector = document.getElementById('trip-selector');
+            const currentValue = selector.value;
+            selector.innerHTML = '<option value="" disabled>-- Select a Trip --</option>';
+
+            const sortedTripKeys = Object.keys(allTrips).sort((a, b) => 
+                allTrips[a].name.localeCompare(allTrips[b].name)
+            );
+            
+            sortedTripKeys.forEach(key => {
+                const trip = allTrips[key];
+                const option = document.createElement('option');
+                option.value = key;
+                const lockIcon = trip.locked ? '🔒 ' : '🔓 ';
+                option.textContent = lockIcon + trip.name;
+                if (key === activeTripKey) {
+                    option.selected = true;
+                }
+                selector.appendChild(option);
+            });
+
+            updateTripActions();
+        }
+
+        function updateTripActions() {
+            const container = document.getElementById('trip-actions-container');
+            
+            if (!activeTripKey || !isAdmin) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const trip = allTrips[activeTripKey];
+            const lockButton = trip.locked 
+                ? `<button class="unlock-btn" onclick="toggleLockTrip()">🔓 Unlock</button>`
+                : `<button class="lock-btn" onclick="toggleLockTrip()">🔒 Lock</button>`;
+
+            container.innerHTML = `
+                <span class="trip-actions">
+                    <button class="edit-trip-btn" onclick="editTripName()">✏️ Edit</button>
+                    ${lockButton}
+                    <button class="delete-trip-btn" onclick="deleteTrip()">🗑️ Delete</button>
+                </span>
+            `;
+        }
+
+        function createTrip() {
+            if (!isAdmin) {
+                alert("Only administrators can create trips.");
+                return;
+            }
+
+            const nameInput = document.getElementById('new-trip-name');
+            const name = nameInput.value.trim();
+            if (!name) {
+                alert("Please enter a name for the new trip.");
+                return;
+            }
+
+            tripsRef.push({ 
+                name: name, 
+                createdBy: currentUser.uid,
+                createdAt: firebase.database.ServerValue.TIMESTAMP,
+                locked: false
+            }).then(newTripRef => {
+                nameInput.value = '';
+                changeActiveTrip(newTripRef.key);
+            }).catch(error => {
+                console.error("Error creating trip:", error);
+                alert("Failed to create trip. Check console.");
+            });
+        }
+
+        function editTripName() {
+            if (!isAdmin) {
+                alert("Only administrators can edit trips.");
+                return;
+            }
+
+            const trip = allTrips[activeTripKey];
+            const newName = prompt("Enter new trip name:", trip.name);
+            
+            if (newName && newName.trim() !== '' && newName !== trip.name) {
+                database.ref(`trips/${activeTripKey}/name`).set(newName.trim())
+                    .then(() => alert("Trip name updated!"))
+                    .catch(error => {
+                        console.error("Error updating trip:", error);
+                        alert("Failed to update trip name.");
+                    });
+            }
+        }
+
+        function toggleLockTrip() {
+            if (!isAdmin) {
+                alert("Only administrators can lock/unlock trips.");
+                return;
+            }
+
+            const trip = allTrips[activeTripKey];
+            const newLockState = !trip.locked;
+            
+            database.ref(`trips/${activeTripKey}/locked`).set(newLockState)
+                .then(() => {
+                    alert(newLockState ? "Trip locked!" : "Trip unlocked!");
+                    changeActiveTrip(activeTripKey); // Refresh UI
+                })
+                .catch(error => {
+                    console.error("Error toggling lock:", error);
+                    alert("Failed to change lock status.");
+                });
+        }
+
+        function deleteTrip() {
+            if (!isAdmin) {
+                alert("Only administrators can delete trips.");
+                return;
+            }
+
+            const trip = allTrips[activeTripKey];
+            
+            // Count expenses and members
+            const expenseCount = expenses.length;
+            const memberCount = members.length;
+            
+            const confirmMsg = `⚠️ DELETE TRIP WARNING ⚠️\n\n` +
+                `Trip: ${trip.name}\n` +
+                `Members: ${memberCount}\n` +
+                `Expenses: ${expenseCount}\n\n` +
+                `This will permanently delete ALL data associated with this trip.\n\n` +
+                `Type the trip name to confirm deletion:`;
+            
+            const confirmation = prompt(confirmMsg);
+            
+            if (confirmation !== trip.name) {
+                if (confirmation !== null) {
+                    alert("Trip name didn't match. Deletion cancelled.");
+                }
+                return;
+            }
+
+            // Ask for admin password
+            const password = prompt("Enter admin password to confirm deletion:");
+            if (password !== ADMIN_PASSWORD) {
+                if (password !== null) {
+                    alert("Incorrect password. Deletion cancelled.");
+                }
+                return;
+            }
+
+            // Delete the trip
+            database.ref(`trips/${activeTripKey}`).remove()
+                .then(() => {
+                    alert("Trip deleted successfully!");
+                    activeTripKey = null;
+                    document.getElementById('app-content').style.opacity = '0.5';
+                    document.getElementById('app-content').style.pointerEvents = 'none';
+                })
+                .catch(error => {
+                    console.error("Error deleting trip:", error);
+                    alert("Failed to delete trip. Check console.");
+                });
+        }
+
+        function changeActiveTrip(tripKey) {
+            activeTripKey = tripKey;
+            
+            if (tripKey) {
+                const trip = allTrips[tripKey];
+                currentTripLocked = trip.locked;
+                
+                document.getElementById('current-trip-name').textContent = trip.name;
+                
+                // Show locked notice if applicable
+                const lockedNotice = document.getElementById('locked-notice');
+                if (currentTripLocked && !isAdmin) {
+                    lockedNotice.style.display = 'block';
+                } else {
+                    lockedNotice.style.display = 'none';
+                }
+
+                // Enable/disable app content based on lock status
+                const appContent = document.getElementById('app-content');
+                if (currentTripLocked && !isAdmin) {
+                    appContent.style.opacity = '1';
+                    appContent.style.pointerEvents = 'none';
+                    appContent.classList.add('admin-only');
+                } else {
+                    appContent.style.opacity = '1';
+                    appContent.style.pointerEvents = 'auto';
+                    appContent.classList.remove('admin-only');
+                }
+
+                // Setup listeners
+                const membersTripRef = database.ref(`trips/${tripKey}/members`);
+                membersTripRef.on('value', handleMembersSnapshot);
+
+                const expensesTripRef = database.ref(`trips/${tripKey}/expenses`);
+                expensesTripRef.on('value', handleExpensesSnapshot);
+
+                updateTripActions();
+            } else {
+                document.getElementById('current-trip-name').textContent = 'None Selected';
+                document.getElementById('app-content').style.opacity = '0.5';
+                document.getElementById('app-content').style.pointerEvents = 'none';
+                document.getElementById('locked-notice').style.display = 'none';
+                members = [];
+                expenses = [];
+                updateUIElements();
+            }
+        }
+
+        function handleMembersSnapshot(snapshot) {
+            members = [];
+            snapshot.forEach((childSnapshot) => {
+                members.push(childSnapshot.val());
+            });
+            updateUIElements();
+        }
+
+        function handleExpensesSnapshot(snapshot) {
+            expenses = [];
+            snapshot.forEach((childSnapshot) => {
+                const expense = childSnapshot.val();
+                expense.key = childSnapshot.key; 
+                expenses.push(expense);
+            });
+            updateExpensesList();
+        }
+
+        // =========================================================
+        // MEMBER MANAGEMENT
+        // =========================================================
+        
+        function addMember() {
+            if (!activeTripKey) return alert("Please select a trip first.");
+            if (currentTripLocked && !isAdmin) return alert("This trip is locked.");
+
+            const nameInput = document.getElementById('new-member-name');
+            const name = nameInput.value.trim();
+            
+            if (name && !members.includes(name)) {
+                const membersTripRef = database.ref(`trips/${activeTripKey}/members`);
+                membersTripRef.child(name).set(name);
+                nameInput.value = '';
+            }
+        }
+        
+        function updateUIElements() {
+            const membersListDiv = document.getElementById('members-list');
+            membersListDiv.innerHTML = members.map(m => `<span>${m}</span>`).join('');
+
+            const paidBySelect = document.getElementById('expense-paid-by');
+            paidBySelect.innerHTML = members.map(m => `<option value="${m}">${m}</option>`).join('');
+            
+            const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
+            if (members.length > 0) {
+                splitCheckboxesDiv.innerHTML = members.map(m => `
+                    <label>
+                        <input type="checkbox" name="split-member" value="${m}" checked> ${m}
+                    </label>
+                `).join('');
+            } else {
+                splitCheckboxesDiv.innerHTML = '<p>Please add members first.</p>';
+            }
+            updateExpensesList();
+        }
+
+        // =========================================================
+        // EXPENSE MANAGEMENT
+        // =========================================================
+
+        document.getElementById('expense-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!activeTripKey) return alert("Please select a trip first.");
+            if (currentTripLocked && !isAdmin) return alert("This trip is locked.");
+            
+            const description = document.getElementById('expense-description').value;
+            const amount = parseFloat(document.getElementById('expense-amount').value);
+            const paidBy = document.getElementById('expense-paid-by').value;
+            const editKey = document.getElementById('edit-expense-index').value;
+        
+            const splitMembers = Array.from(document.querySelectorAll('input[name="split-member"]:checked'))
+                .map(input => input.value);
+
+            if (splitMembers.length === 0) {
+                alert('Please select at least one person to split the expense among.');
+                return;
+            }
+            
+            const expenseData = {
+                description,
+                amount,
+                paidBy,
+                splitMembers,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            const expensesTripRef = database.ref(`trips/${activeTripKey}/expenses`);
+
+            if (editKey !== '') {
+                expensesTripRef.child(editKey).update(expenseData);
+                alert('Expense updated!');
+            } else {
+                expensesTripRef.push(expenseData);
+                alert('Expense added!');
+            }
+
+            document.getElementById('expense-form').reset();
+            document.getElementById('edit-expense-index').value = '';
+            document.getElementById('submit-expense-button').textContent = 'Add Expense';
+            document.querySelectorAll('input[name="split-member"]').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+        });
+        
+        function updateExpensesList() {
+            const expensesListUl = document.getElementById('expenses-list');
+            const canEdit = isAdmin || !currentTripLocked;
+            
+            if (expenses.length === 0) {
+                expensesListUl.innerHTML = '<p>No expenses recorded yet.</p>';
+                return;
+            }
+
+            expensesListUl.innerHTML = expenses.map((exp, index) => `
+                <li>
+                    <div>
+                        <strong>${exp.description}: $${exp.amount.toFixed(2)}</strong>
+                        <br>
+                        Paid by: ${exp.paidBy}. Split among: ${exp.splitMembers.join(', ')}.
+                    </div>
+            
+                    ${canEdit ? `<span class="expense-actions">
+                        <button onclick="editExpense(${index})">Edit</button>
+                        <button onclick="deleteExpense(${index})">Delete</button>
+                    </span>` : ''}
+                </li>
+            `).join('');
+        }
+
+        function deleteExpense(index) {
+            if (!activeTripKey) return;
+            if (currentTripLocked && !isAdmin) return alert("This trip is locked.");
+            
+            if (confirm(`Are you sure you want to delete the expense: ${expenses[index].description}?`)) {
+                const key = expenses[index].key;
+                const expensesTripRef = database.ref(`trips/${activeTripKey}/expenses`);
+
+                expensesTripRef.child(key).remove()
+                    .then(() => console.log("Expense deleted successfully."))
+                    .catch((error) => {
+                        console.error("Error deleting expense:", error);
+                        alert("Failed to delete expense.");
+                    });
+            }
+        }
+        
+        function editExpense(index) {
+            if (currentTripLocked && !isAdmin) return alert("This trip is locked.");
+            
+            const expense = expenses[index];
+            document.getElementById('edit-expense-index').value = expense.key;
+            document.getElementById('expense-description').value = expense.description;
+            document.getElementById('expense-amount').value = expense.amount;
+            document.getElementById('expense-paid-by').value = expense.paidBy;
+            document.getElementById('submit-expense-button').textContent = 'Update Expense';
+
+            const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
+            splitCheckboxesDiv.innerHTML = members.map(m => {
+                const checked = expense.splitMembers.includes(m) ? 'checked' : '';
+                return `
+                    <label>
+                        <input type="checkbox" name="split-member" value="${m}" ${checked}> ${m}
+                    </label>
+                `;
+            }).join('');
+            document.getElementById('expense-form').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // =========================================================
+        // CALCULATION LOGIC
+        // =========================================================
+        
+        function calculateSettlements() {
+            if (!activeTripKey) return alert("Please select a trip first.");
+
+            if (members.length === 0 || expenses.length === 0) {
+                document.getElementById('results').innerHTML = '<p>Please add members and expenses first.</p>';
+                return;
+            }
+
+            const balances = {};
+            members.forEach(m => balances[m] = 0);
+            
+            expenses.forEach(exp => {
+                const amount = exp.amount;
+                const paidBy = exp.paidBy;
+                const splitMembers = exp.splitMembers;
+                const splitAmount = amount / splitMembers.length;
+
+                balances[paidBy] += amount;
+
+                splitMembers.forEach(member => {
+                    balances[member] -= splitAmount;
+                });
+            });
+
+            const summaryHTML = members.map(member => {
+                const balance = balances[member];
+                const typeClass = balance >= 0 ? 'owed' : 'owes';
+                const status = balance >= 0 ? 'is owed' : 'owes';
+                const absoluteBalance = Math.abs(balance).toFixed(2);
+                
+                return `
+                    <div class="summary-item ${typeClass}">
+                        <strong>${member}</strong> ${status} 
+                        <strong>$${absoluteBalance}</strong> overall.
+                    </div>
+                `;
+            }).join('');
+            
+            let creditors = members.filter(m => balances[m] > 0).sort((a, b) => balances[b] - balances[a]);
+            let debtors = members.filter(m => balances[m] < 0).sort((a, b) => balances[a] - balances[b]);
+            
+            const settlements = [];
+            while (debtors.length > 0 && creditors.length > 0) {
+                const debtor = debtors[0];
+                const creditor = creditors[0];
+
+                const amountToPay = Math.min(Math.abs(balances[debtor]), balances[creditor]);
+                
+                settlements.push({
+                    from: debtor,
+                    to: creditor,
+                    amount: amountToPay
+                });
+                balances[debtor] += amountToPay;
+                balances[creditor] -= amountToPay;
+
+                if (Math.abs(balances[debtor]) < 0.01) {
+                    debtors.shift();
+                }
+                if (Math.abs(balances[creditor]) < 0.01) {
+                    creditors.shift();
+                }
+
+                creditors.sort((a, b) => balances[b] - balances[a]);
+                debtors.sort((a, b) => balances[a] - balances[b]);
+            }
+            
+            const settlementHTML = settlements.map(s => `
+                <div class="settlement-item">
+                    <strong>${s.from}</strong> pays <strong>$${s.amount.toFixed(2)}</strong> to <strong>${s.to}</strong>
+                </div>
+            `).join('');
+
+            document.getElementById('results').innerHTML = `
+                <h3>Net Balances Summary</h3>
+                ${summaryHTML}
+                <h3 style="margin-top: 30px;">Recommended Settlements</h3>
+                ${settlementHTML || '<p>Everyone is settled up!</p>'}
+            `;
+        }
+    </script>
+
+</body>
+</html>
