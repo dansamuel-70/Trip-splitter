@@ -174,11 +174,16 @@
         auth.onAuthStateChanged((user) => {
             if (user) {
                 currentUser = user;
+                console.log("User authenticated:", user.uid);
                 checkAdminStatus();
             } else {
+                console.log("No user, signing in anonymously...");
                 // Sign in anonymously
                 auth.signInAnonymously().catch(error => {
                     console.error("Auth error:", error);
+                    // Show error in UI
+                    document.getElementById('auth-status').innerHTML = 
+                        '<span style="color: red;">Authentication failed. Please refresh the page.</span>';
                 });
             }
         });
@@ -187,6 +192,12 @@
             const adminRef = database.ref(`admins/${currentUser.uid}`);
             adminRef.once('value').then(snapshot => {
                 isAdmin = snapshot.exists() && snapshot.val() === true;
+                console.log("Admin status checked:", isAdmin);
+                updateAuthUI();
+            }).catch(error => {
+                console.error("Error checking admin status:", error);
+                // Default to non-admin if check fails
+                isAdmin = false;
                 updateAuthUI();
             });
         }
@@ -435,6 +446,8 @@
         let activeExpensesRef = null;
 
         function changeActiveTrip(tripKey) {
+            console.log("Changing trip to:", tripKey);
+            
             // Clean up old listeners first
             if (activeMembersRef) {
                 activeMembersRef.off();
@@ -445,9 +458,11 @@
                 activeExpensesRef = null;
             }
 
-            // Clear data from previous trip
+            // Clear data from previous trip IMMEDIATELY and update UI
             members = [];
             expenses = [];
+            updateUIElements();
+            updateExpensesList();
             
             activeTripKey = tripKey;
             
@@ -509,6 +524,7 @@
                 expense.key = childSnapshot.key; 
                 expenses.push(expense);
             });
+            console.log(`Loaded ${expenses.length} expenses for trip ${activeTripKey}`);
             updateExpensesList();
         }
 
