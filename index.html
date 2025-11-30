@@ -1,4 +1,15 @@
-<!DOCTYPE html>
+function updateTripSelectorUI() {
+            const selector = document.getElementById('trip-selector');
+            const currentValue = selector.value;
+            selector.innerHTML = '<option value="" disabled selected>-- Select a Trip --</option>';
+
+            const sortedTripKeys = Object.keys(allTrips).sort((a, b) => 
+                allTrips[a].name.localeCompare(allTrips[b].name)
+            );
+            
+            sortedTripKeys.forEach(key => {
+                const trip = allTrips[key];
+                const option = do<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -141,7 +152,7 @@
         // FIREBASE CONFIGURATION
         // =========================================================
         const firebaseConfig = {
-            apiKey: "AIzaSyAXsCINHxQXYxTcge4Mp9St3XzeG4vZwjE",
+            apiKey: "MyKey",
             authDomain: "trip-splitter-7d2ee.firebaseapp.com",
             databaseURL: "https://trip-splitter-7d2ee-default-rtdb.firebaseio.com",
             projectId: "trip-splitter-7d2ee",
@@ -255,9 +266,8 @@
             });
             updateTripSelectorUI();
             
-            if (!activeTripKey && Object.keys(allTrips).length > 0) {
-                changeActiveTrip(Object.keys(allTrips)[0]);
-            }
+            // Don't auto-select a trip on first load
+            // User must manually select from dropdown
         });
 
         function updateTripSelectorUI() {
@@ -423,7 +433,25 @@
                 });
         }
 
+        // Track active listeners so we can clean them up
+        let activeMembersRef = null;
+        let activeExpensesRef = null;
+
         function changeActiveTrip(tripKey) {
+            // Clean up old listeners first
+            if (activeMembersRef) {
+                activeMembersRef.off();
+                activeMembersRef = null;
+            }
+            if (activeExpensesRef) {
+                activeExpensesRef.off();
+                activeExpensesRef = null;
+            }
+
+            // Clear data from previous trip
+            members = [];
+            expenses = [];
+            
             activeTripKey = tripKey;
             
             if (tripKey) {
@@ -452,12 +480,12 @@
                     appContent.classList.remove('admin-only');
                 }
 
-                // Setup listeners
-                const membersTripRef = database.ref(`trips/${tripKey}/members`);
-                membersTripRef.on('value', handleMembersSnapshot);
+                // Setup NEW listeners for this trip only
+                activeMembersRef = database.ref(`trips/${tripKey}/members`);
+                activeMembersRef.on('value', handleMembersSnapshot);
 
-                const expensesTripRef = database.ref(`trips/${tripKey}/expenses`);
-                expensesTripRef.on('value', handleExpensesSnapshot);
+                activeExpensesRef = database.ref(`trips/${tripKey}/expenses`);
+                activeExpensesRef.on('value', handleExpensesSnapshot);
 
                 updateTripActions();
             } else {
@@ -465,8 +493,6 @@
                 document.getElementById('app-content').style.opacity = '0.5';
                 document.getElementById('app-content').style.pointerEvents = 'none';
                 document.getElementById('locked-notice').style.display = 'none';
-                members = [];
-                expenses = [];
                 updateUIElements();
             }
         }
