@@ -1,15 +1,4 @@
-function updateTripSelectorUI() {
-            const selector = document.getElementById('trip-selector');
-            const currentValue = selector.value;
-            selector.innerHTML = '<option value="" disabled selected>-- Select a Trip --</option>';
-
-            const sortedTripKeys = Object.keys(allTrips).sort((a, b) => 
-                allTrips[a].name.localeCompare(allTrips[b].name)
-            );
-            
-            sortedTripKeys.forEach(key => {
-                const trip = allTrips[key];
-                const option = do<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -273,7 +262,7 @@ function updateTripSelectorUI() {
         function updateTripSelectorUI() {
             const selector = document.getElementById('trip-selector');
             const currentValue = selector.value;
-            selector.innerHTML = '<option value="" disabled>-- Select a Trip --</option>';
+            selector.innerHTML = '<option value="" disabled selected>-- Select a Trip --</option>';
 
             const sortedTripKeys = Object.keys(allTrips).sort((a, b) => 
                 allTrips[a].name.localeCompare(allTrips[b].name)
@@ -290,6 +279,14 @@ function updateTripSelectorUI() {
                 }
                 selector.appendChild(option);
             });
+
+            // If no trip is selected, ensure content is disabled
+            if (!activeTripKey) {
+                const appContent = document.getElementById('app-content');
+                appContent.style.opacity = '0.5';
+                appContent.style.pointerEvents = 'none';
+                document.getElementById('current-trip-name').textContent = 'None Selected';
+            }
 
             updateTripActions();
         }
