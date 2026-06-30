@@ -8,7 +8,15 @@
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
         h1, h2, h3 { color: #333; }
         .container { border: 1px solid #ddd; padding: 20px; margin-bottom: 30px; border-radius: 8px; }
-        #members-list span { display: inline-block; background: #e0f7fa; padding: 5px 10px; margin: 5px; border-radius: 4px; }
+        #members-list span {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: #e0f7fa; padding: 5px 10px; margin: 5px; border-radius: 4px;
+        }
+        #members-list span button {
+            background: #f44336; color: white; border: none; border-radius: 3px;
+            padding: 2px 6px; cursor: pointer; font-size: 11px; line-height: 1.4;
+        }
+        #members-list span button:hover { opacity: 0.8; }
         #expense-form label { display: block; margin-top: 10px; font-weight: bold; }
         #expense-form input, #expense-form select { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
         #split-among-checkboxes label { display: inline-block; margin-right: 15px; font-weight: normal; }
@@ -60,6 +68,7 @@
     <div class="container">
         <h2>✈️ Select/Create Trip</h2>
         
+        <!-- ADMIN ONLY: Create trip input is hidden from non-admins in updateAuthUI() -->
         <div id="new-trip-container" style="display: none;">
             <input type="text" id="new-trip-name" placeholder="Enter new trip name (e.g., Summer Holiday)">
             <button onclick="createTrip()">Create Trip</button>
@@ -81,7 +90,8 @@
     <div id="app-content" style="opacity: 0.5; pointer-events: none;">
         <div class="container">
             <h2>👥 Manage Members for <span id="current-trip-name">Current Trip</span></h2>
-            <div>
+            <!-- ADMIN ONLY: This row is hidden/disabled for non-admins via canEditMembers() -->
+            <div id="add-member-row">
                 <input type="text" id="new-member-name" placeholder="Enter member name (e.g., Alice)">
                 <button onclick="addMember()">Add Member</button>
             </div>
@@ -151,13 +161,13 @@
             measurementId: "G-HS5GQ92RFY"
         };
 
-        
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         const auth = firebase.auth();
 
-          
-        // Global state
+        // =========================================================
+        // GLOBAL STATE
+        // =========================================================
         const tripsRef = database.ref('trips');
         let activeTripKey = null;
         let allTrips = {};
@@ -168,144 +178,190 @@
         let currentTripLocked = false;
 
         // =========================================================
+        // GUARD HELPERS
+        // Centralised checks used throughout — easier to audit.
+        // =========================================================
+
+        /** Returns true if a user is fully authenticated (not anonymous). */
+        function requireSignedIn(action) {
+            if (!currentUser || currentUser.isAnonymous) {
+                alert(`You must be signed in to ${action || 'do that'}.`);
+                return false;
+            }
+            return true;
+        }
+
+        /** Returns true if the current user is an administrator. */
+        function requireAdmin(action) {
+            if (!requireSignedIn(action)) return false;
+            if (!isAdmin) {
+                alert(`Only administrators can ${action || 'do that'}.`);
+                return false;
+            }
+            return true;
+        }
+
+        /** Returns true if editing data in the active trip is permitted for the current user. */
+        function canEditExpenses() {
+            if (!requireSignedIn('add or edit expenses')) return false;
+            if (currentTripLocked && !isAdmin) {
+                alert('This trip is locked. Only the administrator can make changes.');
+                return false;
+            }
+            return true;
+        }
+
+        // =========================================================
         // AUTHENTICATION
         // =========================================================
         
         auth.onAuthStateChanged((user) => {
-    if (user) {
-        currentUser = user;
-        console.log("User authenticated:", user.uid);
-        checkAdminStatus();
-    } else {
-        console.log("No user, prompting for email sign-in...");
-        showUserLogin();
-    }
-});
-
-function showUserLogin() {
-    const email = prompt("Enter your email address to access the trip splitter:");
-    if (!email) {
-        document.getElementById('auth-status').innerHTML = 
-            '<span style="color: red;">Please sign in to continue. <a href="#" onclick="showUserLogin()">Click here to sign in.</a></span>';
-        return;
-    }
-
-    const actionCodeSettings = {
-        url: window.location.href,
-        handleCodeInApp: true
-    };
-
-    auth.sendSignInLinkToEmail(email, actionCodeSettings)
-        .then(() => {
-            window.localStorage.setItem('emailForSignIn', email);
-            document.getElementById('auth-status').innerHTML = 
-                `<span>Sign-in link sent to <strong>${email}</strong>. Check your inbox and click the link.</span>`;
-        })
-        .catch((error) => {
-            alert("Error sending sign-in link: " + error.message);
-            console.error(error);
+            if (user) {
+                currentUser = user;
+                console.log("User authenticated:", user.uid);
+                checkAdminStatus();
+            } else {
+                console.log("No user — prompting for email sign-in...");
+                currentUser = null;
+                isAdmin = false;
+                updateAuthUI();
+                showUserLogin();
+            }
         });
-}
+
+        function showUserLogin() {
+            const email = prompt("Enter your email address to access the trip splitter:");
+            if (!email) {
+                document.getElementById('auth-status').innerHTML = 
+                    '<span style="color: red;">Please sign in to continue. <a href="#" onclick="showUserLogin()">Click here to sign in.</a></span>';
+                return;
+            }
+
+            const actionCodeSettings = {
+                url: window.location.href,
+                handleCodeInApp: true
+            };
+
+            auth.sendSignInLinkToEmail(email, actionCodeSettings)
+                .then(() => {
+                    window.localStorage.setItem('emailForSignIn', email);
+                    document.getElementById('auth-status').innerHTML = 
+                        `<span>Sign-in link sent to <strong>${email}</strong>. Check your inbox and click the link.</span>`;
+                })
+                .catch((error) => {
+                    alert("Error sending sign-in link: " + error.message);
+                    console.error(error);
+                });
+        }
 
         // Handle email link sign-in redirect
-if (auth.isSignInWithEmailLink(window.location.href)) {
-    let email = window.localStorage.getItem('emailForSignIn');
-    if (!email) {
-        // If they opened the link on a different device, ask for email again
-        email = prompt("Please confirm your email address to complete sign-in:");
-    }
-    if (email) {
-        auth.signInWithEmailLink(email, window.location.href)
-            .then((result) => {
-                currentUser = result.user;
-                window.localStorage.removeItem('emailForSignIn');
-                // Clean the URL so the link token isn't sitting in the address bar
-                window.history.replaceState({}, document.title, window.location.pathname);
-                console.log("Email link sign-in successful:", result.user.uid);
-                checkAdminStatus();
-            })
-            .catch((error) => {
-                console.error("Error completing sign-in:", error);
-                alert("Sign-in failed: " + error.message);
+        if (auth.isSignInWithEmailLink(window.location.href)) {
+            let email = window.localStorage.getItem('emailForSignIn');
+            if (!email) {
+                email = prompt("Please confirm your email address to complete sign-in:");
+            }
+            if (email) {
+                auth.signInWithEmailLink(email, window.location.href)
+                    .then((result) => {
+                        currentUser = result.user;
+                        window.localStorage.removeItem('emailForSignIn');
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                        console.log("Email link sign-in successful:", result.user.uid);
+                        checkAdminStatus();
+                    })
+                    .catch((error) => {
+                        console.error("Error completing sign-in:", error);
+                        alert("Sign-in failed: " + error.message);
+                    });
+            }
+        }
+
+        function checkAdminStatus() {
+            const adminRef = database.ref(`admins/${currentUser.uid}`);
+            adminRef.once('value').then(snapshot => {
+                isAdmin = snapshot.exists() && snapshot.val() === true;
+                console.log("Admin status:", isAdmin);
+                updateAuthUI();
+                // Re-render member list to show/hide delete buttons
+                updateUIElements();
+            }).catch(error => {
+                console.error("Error checking admin status:", error);
+                isAdmin = false;
+                updateAuthUI();
             });
-    }
-}
+        }
 
-    function checkAdminStatus() {
-    const adminRef = database.ref(`admins/${currentUser.uid}`);
-    adminRef.once('value').then(snapshot => {
-        isAdmin = snapshot.exists() && snapshot.val() === true;
-        console.log("Admin status checked:", isAdmin);
-        updateAuthUI();
-    }).catch(error => {
-        console.error("Error checking admin status:", error);
-        isAdmin = false;
-        updateAuthUI();
-    });
-}
         function updateAuthUI() {
-    const authStatus = document.getElementById('auth-status');
-    const newTripContainer = document.getElementById('new-trip-container');
-    
-    if (isAdmin) {
-        authStatus.innerHTML = `
-            <span>Logged in as: <strong>Administrator</strong></span>
-            <span class="status-badge admin-badge">ADMIN</span>
-            <button onclick="logoutAdmin()" style="margin-left: 15px; padding: 5px 15px; border: none; border-radius: 4px; background: #f44336; color: white; cursor: pointer;">Logout</button>
-        `;
-        newTripContainer.style.display = 'flex';
-    } else if (currentUser && !currentUser.isAnonymous) {
-        authStatus.innerHTML = `
-            <span>Logged in as: <strong>${currentUser.email}</strong></span>
-            <span class="status-badge user-badge">USER</span>
-            <button onclick="showAdminLogin()" style="margin-left: 15px; padding: 5px 15px; border: none; border-radius: 4px; background: #4CAF50; color: white; cursor: pointer;">Admin Login</button>
-            <button onclick="logoutUser()" style="margin-left: 8px; padding: 5px 15px; border: none; border-radius: 4px; background: #f44336; color: white; cursor: pointer;">Logout</button>
-        `;
-        newTripContainer.style.display = 'none';
-    } else {
-        authStatus.innerHTML = `
-            <span>Not signed in</span>
-            <button onclick="showUserLogin()" style="margin-left: 15px; padding: 5px 15px; border: none; border-radius: 4px; background: #2196F3; color: white; cursor: pointer;">Sign In</button>
-        `;
-        newTripContainer.style.display = 'none';
-    }
-}
+            const authStatus = document.getElementById('auth-status');
+            const newTripContainer = document.getElementById('new-trip-container');
+            const addMemberRow = document.getElementById('add-member-row');
 
-function logoutUser() {
-    if (confirm("Sign out?")) {
-        auth.signOut();
-    }
-}
+            if (isAdmin) {
+                authStatus.innerHTML = `
+                    <span>Logged in as: <strong>Administrator</strong></span>
+                    <span class="status-badge admin-badge">ADMIN</span>
+                    <button onclick="logoutAdmin()" style="margin-left:15px;padding:5px 15px;border:none;border-radius:4px;background:#f44336;color:white;cursor:pointer;">Logout</button>
+                `;
+                // Admins can create trips and add members
+                newTripContainer.style.display = 'flex';
+                addMemberRow.style.display = 'block';
+            } else if (currentUser && !currentUser.isAnonymous) {
+                authStatus.innerHTML = `
+                    <span>Logged in as: <strong>${currentUser.email}</strong></span>
+                    <span class="status-badge user-badge">USER</span>
+                    <button onclick="showAdminLogin()" style="margin-left:15px;padding:5px 15px;border:none;border-radius:4px;background:#4CAF50;color:white;cursor:pointer;">Admin Login</button>
+                    <button onclick="logoutUser()" style="margin-left:8px;padding:5px 15px;border:none;border-radius:4px;background:#f44336;color:white;cursor:pointer;">Logout</button>
+                `;
+                // Regular users cannot create trips or manage members
+                newTripContainer.style.display = 'none';
+                addMemberRow.style.display = 'none';
+            } else {
+                authStatus.innerHTML = `
+                    <span>Not signed in</span>
+                    <button onclick="showUserLogin()" style="margin-left:15px;padding:5px 15px;border:none;border-radius:4px;background:#2196F3;color:white;cursor:pointer;">Sign In</button>
+                `;
+                newTripContainer.style.display = 'none';
+                addMemberRow.style.display = 'none';
+            }
+
+            updateTripActions();
+        }
+
+        function logoutUser() {
+            if (confirm("Sign out?")) {
+                auth.signOut();
+            }
+        }
+
         function showAdminLogin() {
-    const email = prompt("Enter your admin email address:");
-    if (!email) return;
+            const email = prompt("Enter your admin email address:");
+            if (!email) return;
 
-    const actionCodeSettings = {
-        url: window.location.href, // redirects back to whatever page they're on
-        handleCodeInApp: true
-    };
+            const actionCodeSettings = {
+                url: window.location.href,
+                handleCodeInApp: true
+            };
 
-    auth.sendSignInLinkToEmail(email, actionCodeSettings)
-        .then(() => {
-            // Save email in localStorage so we can complete sign-in after redirect
-            window.localStorage.setItem('emailForSignIn', email);
-            alert(`Sign-in link sent to ${email}. Check your inbox and click the link.`);
-        })
-        .catch((error) => {
-            alert("Error sending sign-in link: " + error.message);
-            console.error(error);
-        });
-}
+            auth.sendSignInLinkToEmail(email, actionCodeSettings)
+                .then(() => {
+                    window.localStorage.setItem('emailForSignIn', email);
+                    alert(`Sign-in link sent to ${email}. Check your inbox and click the link.`);
+                })
+                .catch((error) => {
+                    alert("Error sending sign-in link: " + error.message);
+                    console.error(error);
+                });
+        }
 
         function logoutAdmin() {
-    if (confirm("Logout as administrator?")) {
-        auth.signOut().then(() => {
-            isAdmin = false;
-            updateAuthUI();
-            // onAuthStateChanged fires automatically and signs in anonymously
-        });
-    }
-}
+            if (confirm("Logout as administrator?")) {
+                auth.signOut().then(() => {
+                    isAdmin = false;
+                    updateAuthUI();
+                });
+            }
+        }
+
         // =========================================================
         // TRIP MANAGEMENT
         // =========================================================
@@ -323,20 +379,16 @@ function logoutUser() {
                 };
             });
             updateTripSelectorUI();
-            
-            // Don't auto-select a trip on first load
-            // User must manually select from dropdown
         });
 
         function updateTripSelectorUI() {
             const selector = document.getElementById('trip-selector');
-            const currentValue = selector.value;
             selector.innerHTML = '<option value="" disabled selected>-- Select a Trip --</option>';
 
-            const sortedTripKeys = Object.keys(allTrips).sort((a, b) => 
+            const sortedTripKeys = Object.keys(allTrips).sort((a, b) =>
                 allTrips[a].name.localeCompare(allTrips[b].name)
             );
-            
+
             sortedTripKeys.forEach(key => {
                 const trip = allTrips[key];
                 const option = document.createElement('option');
@@ -349,7 +401,6 @@ function logoutUser() {
                 selector.appendChild(option);
             });
 
-            // If no trip is selected, ensure content is disabled
             if (!activeTripKey) {
                 const appContent = document.getElementById('app-content');
                 appContent.style.opacity = '0.5';
@@ -362,14 +413,15 @@ function logoutUser() {
 
         function updateTripActions() {
             const container = document.getElementById('trip-actions-container');
-            
+
+            // Only admins see trip-level action buttons (edit, lock, delete)
             if (!activeTripKey || !isAdmin) {
                 container.innerHTML = '';
                 return;
             }
 
             const trip = allTrips[activeTripKey];
-            const lockButton = trip.locked 
+            const lockButton = trip.locked
                 ? `<button class="unlock-btn" onclick="toggleLockTrip()">🔓 Unlock</button>`
                 : `<button class="lock-btn" onclick="toggleLockTrip()">🔒 Lock</button>`;
 
@@ -383,10 +435,8 @@ function logoutUser() {
         }
 
         function createTrip() {
-            if (!isAdmin) {
-                alert("Only administrators can create trips.");
-                return;
-            }
+            // GUARD: admin only
+            if (!requireAdmin('create trips')) return;
 
             const nameInput = document.getElementById('new-trip-name');
             const name = nameInput.value.trim();
@@ -395,8 +445,8 @@ function logoutUser() {
                 return;
             }
 
-            tripsRef.push({ 
-                name: name, 
+            tripsRef.push({
+                name: name,
                 createdBy: currentUser.uid,
                 createdAt: firebase.database.ServerValue.TIMESTAMP,
                 locked: false
@@ -410,14 +460,12 @@ function logoutUser() {
         }
 
         function editTripName() {
-            if (!isAdmin) {
-                alert("Only administrators can edit trips.");
-                return;
-            }
+            // GUARD: admin only
+            if (!requireAdmin('edit trip names')) return;
 
             const trip = allTrips[activeTripKey];
             const newName = prompt("Enter new trip name:", trip.name);
-            
+
             if (newName && newName.trim() !== '' && newName !== trip.name) {
                 database.ref(`trips/${activeTripKey}/name`).set(newName.trim())
                     .then(() => alert("Trip name updated!"))
@@ -429,14 +477,12 @@ function logoutUser() {
         }
 
         function toggleLockTrip() {
-            if (!isAdmin) {
-                alert("Only administrators can lock/unlock trips.");
-                return;
-            }
+            // GUARD: admin only
+            if (!requireAdmin('lock or unlock trips')) return;
 
             const trip = allTrips[activeTripKey];
             const newLockState = !trip.locked;
-            
+
             database.ref(`trips/${activeTripKey}/locked`).set(newLockState)
                 .then(() => {
                     alert(newLockState ? "Trip locked!" : "Trip unlocked!");
@@ -449,26 +495,23 @@ function logoutUser() {
         }
 
         function deleteTrip() {
-            if (!isAdmin) {
-                alert("Only administrators can delete trips.");
-                return;
-            }
+            // GUARD: admin only
+            if (!requireAdmin('delete trips')) return;
 
             const trip = allTrips[activeTripKey];
-            
-            // Count expenses and members
             const expenseCount = expenses.length;
             const memberCount = members.length;
-            
-            const confirmMsg = `⚠️ DELETE TRIP WARNING ⚠️\n\n` +
+
+            const confirmMsg =
+                `⚠️ DELETE TRIP WARNING ⚠️\n\n` +
                 `Trip: ${trip.name}\n` +
                 `Members: ${memberCount}\n` +
                 `Expenses: ${expenseCount}\n\n` +
                 `This will permanently delete ALL data associated with this trip.\n\n` +
                 `Type the trip name to confirm deletion:`;
-            
+
             const confirmation = prompt(confirmMsg);
-            
+
             if (confirmation !== trip.name) {
                 if (confirmation !== null) {
                     alert("Trip name didn't match. Deletion cancelled.");
@@ -476,22 +519,23 @@ function logoutUser() {
                 return;
             }
 
-            // Ask for admin password
-            const password = prompt("Enter admin password to confirm deletion:");
-            if (password !== ADMIN_PASSWORD) {
-                if (password !== null) {
-                    alert("Incorrect password. Deletion cancelled.");
-                }
+            // NOTE: No separate password check here — the user is already authenticated
+            // as an admin via Firebase. A second password field was previously referencing
+            // an undefined variable (ADMIN_PASSWORD) which would crash at runtime.
+            if (!confirm(`Final confirmation: permanently delete "${trip.name}" and all its data?`)) {
                 return;
             }
 
-            // Delete the trip
             database.ref(`trips/${activeTripKey}`).remove()
                 .then(() => {
                     alert("Trip deleted successfully!");
                     activeTripKey = null;
+                    members = [];
+                    expenses = [];
                     document.getElementById('app-content').style.opacity = '0.5';
                     document.getElementById('app-content').style.pointerEvents = 'none';
+                    document.getElementById('current-trip-name').textContent = 'None Selected';
+                    updateTripActions();
                 })
                 .catch(error => {
                     console.error("Error deleting trip:", error);
@@ -499,46 +543,35 @@ function logoutUser() {
                 });
         }
 
-        // Track active listeners so we can clean them up
+        // =========================================================
+        // ACTIVE TRIP LISTENER MANAGEMENT
+        // =========================================================
+
         let activeMembersRef = null;
         let activeExpensesRef = null;
 
         function changeActiveTrip(tripKey) {
             console.log("Changing trip to:", tripKey);
-            
-            // Clean up old listeners first
-            if (activeMembersRef) {
-                activeMembersRef.off();
-                activeMembersRef = null;
-            }
-            if (activeExpensesRef) {
-                activeExpensesRef.off();
-                activeExpensesRef = null;
-            }
 
-            // Clear data from previous trip IMMEDIATELY and update UI
+            if (activeMembersRef) { activeMembersRef.off(); activeMembersRef = null; }
+            if (activeExpensesRef) { activeExpensesRef.off(); activeExpensesRef = null; }
+
             members = [];
             expenses = [];
             updateUIElements();
             updateExpensesList();
-            
+
             activeTripKey = tripKey;
-            
+
             if (tripKey) {
                 const trip = allTrips[tripKey];
                 currentTripLocked = trip.locked;
-                
-                document.getElementById('current-trip-name').textContent = trip.name;
-                
-                // Show locked notice if applicable
-                const lockedNotice = document.getElementById('locked-notice');
-                if (currentTripLocked && !isAdmin) {
-                    lockedNotice.style.display = 'block';
-                } else {
-                    lockedNotice.style.display = 'none';
-                }
 
-                // Enable/disable app content based on lock status
+                document.getElementById('current-trip-name').textContent = trip.name;
+
+                const lockedNotice = document.getElementById('locked-notice');
+                lockedNotice.style.display = (currentTripLocked && !isAdmin) ? 'block' : 'none';
+
                 const appContent = document.getElementById('app-content');
                 if (currentTripLocked && !isAdmin) {
                     appContent.style.opacity = '1';
@@ -550,7 +583,6 @@ function logoutUser() {
                     appContent.classList.remove('admin-only');
                 }
 
-                // Setup NEW listeners for this trip only
                 activeMembersRef = database.ref(`trips/${tripKey}/members`);
                 activeMembersRef.on('value', handleMembersSnapshot);
 
@@ -563,6 +595,7 @@ function logoutUser() {
                 document.getElementById('app-content').style.opacity = '0.5';
                 document.getElementById('app-content').style.pointerEvents = 'none';
                 document.getElementById('locked-notice').style.display = 'none';
+                updateTripActions();
                 updateUIElements();
             }
         }
@@ -579,7 +612,7 @@ function logoutUser() {
             expenses = [];
             snapshot.forEach((childSnapshot) => {
                 const expense = childSnapshot.val();
-                expense.key = childSnapshot.key; 
+                expense.key = childSnapshot.key;
                 expenses.push(expense);
             });
             console.log(`Loaded ${expenses.length} expenses for trip ${activeTripKey}`);
@@ -587,30 +620,64 @@ function logoutUser() {
         }
 
         // =========================================================
-        // MEMBER MANAGEMENT
+        // MEMBER MANAGEMENT  (admin only)
         // =========================================================
-        
+
         function addMember() {
+            // GUARD: admin only — regular signed-in users cannot add members
+            if (!requireAdmin('add members')) return;
             if (!activeTripKey) return alert("Please select a trip first.");
-            if (currentTripLocked && !isAdmin) return alert("This trip is locked.");
+            if (currentTripLocked) return alert("This trip is locked.");
 
             const nameInput = document.getElementById('new-member-name');
             const name = nameInput.value.trim();
-            
-            if (name && !members.includes(name)) {
-                const membersTripRef = database.ref(`trips/${activeTripKey}/members`);
-                membersTripRef.child(name).set(name);
-                nameInput.value = '';
-            }
+
+            if (!name) return alert("Please enter a member name.");
+            if (members.includes(name)) return alert(`"${name}" is already a member.`);
+
+            database.ref(`trips/${activeTripKey}/members`).child(name).set(name)
+                .then(() => { nameInput.value = ''; })
+                .catch(error => {
+                    console.error("Error adding member:", error);
+                    alert("Failed to add member.");
+                });
         }
-        
+
+        function deleteMember(memberName) {
+            // GUARD: admin only
+            if (!requireAdmin('delete members')) return;
+            if (!activeTripKey) return;
+            if (currentTripLocked) return alert("This trip is locked.");
+
+            if (!confirm(`Remove "${memberName}" from this trip?\n\nNote: existing expenses referencing this member will not be changed.`)) {
+                return;
+            }
+
+            database.ref(`trips/${activeTripKey}/members/${memberName}`).remove()
+                .catch(error => {
+                    console.error("Error removing member:", error);
+                    alert("Failed to remove member.");
+                });
+        }
+
         function updateUIElements() {
             const membersListDiv = document.getElementById('members-list');
-            membersListDiv.innerHTML = members.map(m => `<span>${m}</span>`).join('');
+
+            if (members.length === 0) {
+                membersListDiv.innerHTML = '<p>No members added yet.</p>';
+            } else {
+                // Show delete button only to admins
+                membersListDiv.innerHTML = members.map(m => `
+                    <span>
+                        ${m}
+                        ${isAdmin ? `<button onclick="deleteMember('${m}')" title="Remove ${m}">✕</button>` : ''}
+                    </span>
+                `).join('');
+            }
 
             const paidBySelect = document.getElementById('expense-paid-by');
             paidBySelect.innerHTML = members.map(m => `<option value="${m}">${m}</option>`).join('');
-            
+
             const splitCheckboxesDiv = document.getElementById('split-among-checkboxes');
             if (members.length > 0) {
                 splitCheckboxesDiv.innerHTML = members.map(m => `
@@ -621,31 +688,37 @@ function logoutUser() {
             } else {
                 splitCheckboxesDiv.innerHTML = '<p>Please add members first.</p>';
             }
+
             updateExpensesList();
         }
 
         // =========================================================
-        // EXPENSE MANAGEMENT
+        // EXPENSE MANAGEMENT  (any signed-in user, unless trip is locked)
         // =========================================================
 
         document.getElementById('expense-form').addEventListener('submit', function(e) {
             e.preventDefault();
+
+            // GUARD: must be signed in
+            if (!requireSignedIn('add or edit expenses')) return;
             if (!activeTripKey) return alert("Please select a trip first.");
-            if (currentTripLocked && !isAdmin) return alert("This trip is locked.");
-            
+            // GUARD: locked trips block non-admins
+            if (!canEditExpenses()) return;
+
             const description = document.getElementById('expense-description').value;
             const amount = parseFloat(document.getElementById('expense-amount').value);
             const paidBy = document.getElementById('expense-paid-by').value;
             const editKey = document.getElementById('edit-expense-index').value;
-        
-            const splitMembers = Array.from(document.querySelectorAll('input[name="split-member"]:checked'))
-                .map(input => input.value);
+
+            const splitMembers = Array.from(
+                document.querySelectorAll('input[name="split-member"]:checked')
+            ).map(input => input.value);
 
             if (splitMembers.length === 0) {
                 alert('Please select at least one person to split the expense among.');
                 return;
             }
-            
+
             const expenseData = {
                 description,
                 amount,
@@ -657,25 +730,32 @@ function logoutUser() {
             const expensesTripRef = database.ref(`trips/${activeTripKey}/expenses`);
 
             if (editKey !== '') {
-                expensesTripRef.child(editKey).update(expenseData);
-                alert('Expense updated!');
+                expensesTripRef.child(editKey).update(expenseData)
+                    .then(() => alert('Expense updated!'))
+                    .catch(error => {
+                        console.error("Error updating expense:", error);
+                        alert("Failed to update expense.");
+                    });
             } else {
-                expensesTripRef.push(expenseData);
-                alert('Expense added!');
+                expensesTripRef.push(expenseData)
+                    .then(() => alert('Expense added!'))
+                    .catch(error => {
+                        console.error("Error adding expense:", error);
+                        alert("Failed to add expense.");
+                    });
             }
 
             document.getElementById('expense-form').reset();
             document.getElementById('edit-expense-index').value = '';
             document.getElementById('submit-expense-button').textContent = 'Add Expense';
-            document.querySelectorAll('input[name="split-member"]').forEach(checkbox => {
-                checkbox.checked = true;
-            });
+            document.querySelectorAll('input[name="split-member"]').forEach(cb => { cb.checked = true; });
         });
-        
+
         function updateExpensesList() {
             const expensesListUl = document.getElementById('expenses-list');
-            const canEdit = isAdmin || !currentTripLocked;
-            
+            // Edit/delete buttons visible to signed-in users on unlocked trips (or admins always)
+            const canEdit = currentUser && !currentUser.isAnonymous && (isAdmin || !currentTripLocked);
+
             if (expenses.length === 0) {
                 expensesListUl.innerHTML = '<p>No expenses recorded yet.</p>';
                 return;
@@ -688,7 +768,6 @@ function logoutUser() {
                         <br>
                         Paid by: ${exp.paidBy}. Split among: ${exp.splitMembers.join(', ')}.
                     </div>
-            
                     ${canEdit ? `<span class="expense-actions">
                         <button onclick="editExpense(${index})">Edit</button>
                         <button onclick="deleteExpense(${index})">Delete</button>
@@ -698,25 +777,27 @@ function logoutUser() {
         }
 
         function deleteExpense(index) {
+            // GUARD: must be signed in
+            if (!requireSignedIn('delete expenses')) return;
             if (!activeTripKey) return;
-            if (currentTripLocked && !isAdmin) return alert("This trip is locked.");
-            
-            if (confirm(`Are you sure you want to delete the expense: ${expenses[index].description}?`)) {
-                const key = expenses[index].key;
-                const expensesTripRef = database.ref(`trips/${activeTripKey}/expenses`);
+            if (!canEditExpenses()) return;
 
-                expensesTripRef.child(key).remove()
-                    .then(() => console.log("Expense deleted successfully."))
-                    .catch((error) => {
+            if (confirm(`Delete expense: "${expenses[index].description}"?`)) {
+                const key = expenses[index].key;
+                database.ref(`trips/${activeTripKey}/expenses`).child(key).remove()
+                    .then(() => console.log("Expense deleted."))
+                    .catch(error => {
                         console.error("Error deleting expense:", error);
                         alert("Failed to delete expense.");
                     });
             }
         }
-        
+
         function editExpense(index) {
-            if (currentTripLocked && !isAdmin) return alert("This trip is locked.");
-            
+            // GUARD: must be signed in
+            if (!requireSignedIn('edit expenses')) return;
+            if (!canEditExpenses()) return;
+
             const expense = expenses[index];
             document.getElementById('edit-expense-index').value = expense.key;
             document.getElementById('expense-description').value = expense.description;
@@ -733,13 +814,14 @@ function logoutUser() {
                     </label>
                 `;
             }).join('');
+
             document.getElementById('expense-form').scrollIntoView({ behavior: 'smooth' });
         }
-        
+
         // =========================================================
         // CALCULATION LOGIC
         // =========================================================
-        
+
         function calculateSettlements() {
             if (!activeTripKey) return alert("Please select a trip first.");
 
@@ -750,7 +832,7 @@ function logoutUser() {
 
             const balances = {};
             members.forEach(m => balances[m] = 0);
-            
+
             expenses.forEach(exp => {
                 const amount = exp.amount;
                 const paidBy = exp.paidBy;
@@ -758,10 +840,7 @@ function logoutUser() {
                 const splitAmount = amount / splitMembers.length;
 
                 balances[paidBy] += amount;
-
-                splitMembers.forEach(member => {
-                    balances[member] -= splitAmount;
-                });
+                splitMembers.forEach(member => { balances[member] -= splitAmount; });
             });
 
             const summaryHTML = members.map(member => {
@@ -769,44 +848,33 @@ function logoutUser() {
                 const typeClass = balance >= 0 ? 'owed' : 'owes';
                 const status = balance >= 0 ? 'is owed' : 'owes';
                 const absoluteBalance = Math.abs(balance).toFixed(2);
-                
                 return `
                     <div class="summary-item ${typeClass}">
-                        <strong>${member}</strong> ${status} 
-                        <strong>$${absoluteBalance}</strong> overall.
+                        <strong>${member}</strong> ${status} <strong>$${absoluteBalance}</strong> overall.
                     </div>
                 `;
             }).join('');
-            
+
             let creditors = members.filter(m => balances[m] > 0).sort((a, b) => balances[b] - balances[a]);
-            let debtors = members.filter(m => balances[m] < 0).sort((a, b) => balances[a] - balances[b]);
-            
+            let debtors   = members.filter(m => balances[m] < 0).sort((a, b) => balances[a] - balances[b]);
+
             const settlements = [];
             while (debtors.length > 0 && creditors.length > 0) {
-                const debtor = debtors[0];
+                const debtor   = debtors[0];
                 const creditor = creditors[0];
-
                 const amountToPay = Math.min(Math.abs(balances[debtor]), balances[creditor]);
-                
-                settlements.push({
-                    from: debtor,
-                    to: creditor,
-                    amount: amountToPay
-                });
-                balances[debtor] += amountToPay;
+
+                settlements.push({ from: debtor, to: creditor, amount: amountToPay });
+                balances[debtor]   += amountToPay;
                 balances[creditor] -= amountToPay;
 
-                if (Math.abs(balances[debtor]) < 0.01) {
-                    debtors.shift();
-                }
-                if (Math.abs(balances[creditor]) < 0.01) {
-                    creditors.shift();
-                }
+                if (Math.abs(balances[debtor])   < 0.01) debtors.shift();
+                if (Math.abs(balances[creditor])  < 0.01) creditors.shift();
 
                 creditors.sort((a, b) => balances[b] - balances[a]);
                 debtors.sort((a, b) => balances[a] - balances[b]);
             }
-            
+
             const settlementHTML = settlements.map(s => `
                 <div class="settlement-item">
                     <strong>${s.from}</strong> pays <strong>$${s.amount.toFixed(2)}</strong> to <strong>${s.to}</strong>
