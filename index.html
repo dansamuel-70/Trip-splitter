@@ -156,6 +156,17 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         const auth = firebase.auth();
+
+        auth.onAuthStateChanged(user => {
+          if (!user) {
+            auth.signInAnonymously().catch(error => {
+              console.error("Anonymous sign-in failed:", error);
+            });
+          } else {
+            console.log("Signed in as:", user.uid);
+          }
+        });
+        </script>
         
         // Global state
         const tripsRef = database.ref('trips');
