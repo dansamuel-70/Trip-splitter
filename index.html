@@ -213,18 +213,21 @@ if (auth.isSignInWithEmailLink(window.location.href)) {
 }
 
         function checkAdminStatus() {
-            const adminRef = database.ref(`admins/${currentUser.uid}`);
-            adminRef.once('value').then(snapshot => {
-                isAdmin = snapshot.exists() && snapshot.val() == true;
-                console.log("Admin status checked:", isAdmin);
-                updateAuthUI();
-            }).catch(error => {
-                console.error("Error checking admin status:", error);
-                // Default to non-admin if check fails
-                isAdmin = false;
-                updateAuthUI();
-            });
-        }
+    const adminRef = database.ref(`admins/${currentUser.uid}`);
+    console.log("Checking admin for UID:", currentUser.uid);
+    adminRef.once('value').then(snapshot => {
+        console.log("Snapshot exists:", snapshot.exists());
+        console.log("Snapshot val:", snapshot.val());
+        console.log("Snapshot val type:", typeof snapshot.val());
+        isAdmin = snapshot.exists() && snapshot.val() == true;
+        console.log("Admin status checked:", isAdmin);
+        updateAuthUI();
+    }).catch(error => {
+        console.error("Error checking admin status - FULL ERROR:", error.code, error.message);
+        isAdmin = false;
+        updateAuthUI();
+    });
+}
 
         function updateAuthUI() {
             const authStatus = document.getElementById('auth-status');
