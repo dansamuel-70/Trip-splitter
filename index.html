@@ -172,21 +172,40 @@
         // =========================================================
         
         auth.onAuthStateChanged((user) => {
-            if (user) {
-                currentUser = user;
-                console.log("User authenticated:", user.uid);
-                checkAdminStatus();
-            } else {
-                console.log("No user, signing in anonymously...");
-                // Sign in anonymously
-                auth.signInAnonymously().catch(error => {
-                    console.error("Auth error:", error);
-                    // Show error in UI
-                    document.getElementById('auth-status').innerHTML = 
-                        '<span style="color: red;">Authentication failed. Please refresh the page.</span>';
-                });
-            }
+    if (user) {
+        currentUser = user;
+        console.log("User authenticated:", user.uid);
+        checkAdminStatus();
+    } else {
+        console.log("No user, prompting for email sign-in...");
+        showUserLogin();
+    }
+});
+
+function showUserLogin() {
+    const email = prompt("Enter your email address to access the trip splitter:");
+    if (!email) {
+        document.getElementById('auth-status').innerHTML = 
+            '<span style="color: red;">Please sign in to continue. <a href="#" onclick="showUserLogin()">Click here to sign in.</a></span>';
+        return;
+    }
+
+    const actionCodeSettings = {
+        url: window.location.href,
+        handleCodeInApp: true
+    };
+
+    auth.sendSignInLinkToEmail(email, actionCodeSettings)
+        .then(() => {
+            window.localStorage.setItem('emailForSignIn', email);
+            document.getElementById('auth-status').innerHTML = 
+                `<span>Sign-in link sent to <strong>${email}</strong>. Check your inbox and click the link.</span>`;
+        })
+        .catch((error) => {
+            alert("Error sending sign-in link: " + error.message);
+            console.error(error);
         });
+}
 
         // Handle email link sign-in redirect
 if (auth.isSignInWithEmailLink(window.location.href)) {
