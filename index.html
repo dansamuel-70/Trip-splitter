@@ -215,7 +215,7 @@ if (auth.isSignInWithEmailLink(window.location.href)) {
         function checkAdminStatus() {
             const adminRef = database.ref(`admins/${currentUser.uid}`);
             adminRef.once('value').then(snapshot => {
-                isAdmin = snapshot.exists() && snapshot.val() === true;
+                isAdmin = snapshot.exists() && snapshot.val() == true;
                 console.log("Admin status checked:", isAdmin);
                 updateAuthUI();
             }).catch(error => {
