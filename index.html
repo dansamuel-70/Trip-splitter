@@ -243,20 +243,16 @@
             console.error(error);
         });
 }
-Replace logoutAdmin() with this:
-js
-        function logoutAdmin() {
-            if (confirm("Logout as administrator?")) {
-                database.ref(`admins/${currentUser.uid}`).remove().then(() => {
-                    isAdmin = false;
-                    updateAuthUI();
-                    if (activeTripKey) {
-                        changeActiveTrip(activeTripKey); // Refresh to update UI
-                    }
-                });
-            }
-        }
 
+        function logoutAdmin() {
+    if (confirm("Logout as administrator?")) {
+        auth.signOut().then(() => {
+            isAdmin = false;
+            updateAuthUI();
+            // onAuthStateChanged fires automatically and signs in anonymously
+        });
+    }
+}
         // =========================================================
         // TRIP MANAGEMENT
         // =========================================================
