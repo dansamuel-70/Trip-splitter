@@ -302,7 +302,7 @@
                     <span class="status-badge admin-badge">ADMIN</span>
                     <button onclick="logoutAdmin()" style="margin-left:15px;padding:5px 15px;border:none;border-radius:4px;background:#f44336;color:white;cursor:pointer;">Logout</button>
                 `;
-                // Admins can create trips and add members
+                // Admins can create trips; member management is open to all signed-in users
                 newTripContainer.style.display = 'flex';
                 addMemberRow.style.display = 'block';
             } else if (currentUser && !currentUser.isAnonymous) {
@@ -312,9 +312,9 @@
                     <button onclick="showAdminLogin()" style="margin-left:15px;padding:5px 15px;border:none;border-radius:4px;background:#4CAF50;color:white;cursor:pointer;">Admin Login</button>
                     <button onclick="logoutUser()" style="margin-left:8px;padding:5px 15px;border:none;border-radius:4px;background:#f44336;color:white;cursor:pointer;">Logout</button>
                 `;
-                // Regular users cannot create trips or manage members
+                // Regular users cannot create trips, but can manage members
                 newTripContainer.style.display = 'none';
-                addMemberRow.style.display = 'none';
+                addMemberRow.style.display = 'block';
             } else {
                 authStatus.innerHTML = `
                     <span>Not signed in</span>
@@ -624,8 +624,8 @@
         // =========================================================
 
         function addMember() {
-            // GUARD: admin only — regular signed-in users cannot add members
-            if (!requireAdmin('add members')) return;
+            // GUARD: any signed-in user may add members
+            if (!requireSignedIn('add members')) return;
             if (!activeTripKey) return alert("Please select a trip first.");
             if (currentTripLocked) return alert("This trip is locked.");
 
@@ -644,12 +644,12 @@
         }
 
         function deleteMember(memberName) {
-            // GUARD: admin only
-            if (!requireAdmin('delete members')) return;
+            // GUARD: any signed-in user may delete members
+            if (!requireSignedIn('delete members')) return;
             if (!activeTripKey) return;
-            if (currentTripLocked) return alert("This trip is locked.");
+            if (currentTripLocked && !isAdmin) return alert("This trip is locked.");
 
-            if (!confirm(`Remove "${memberName}" from this trip?\n\nNote: existing expenses referencing this member will not be changed.`)) {
+            if (!confirm(`Remove "${memberName}" from this trip?\n\nNote: existing expenses that reference this member will not be changed.`)) {
                 return;
             }
 
@@ -666,11 +666,12 @@
             if (members.length === 0) {
                 membersListDiv.innerHTML = '<p>No members added yet.</p>';
             } else {
-                // Show delete button only to admins
+                // Show delete button to any signed-in user
+                const canManageMembers = currentUser && !currentUser.isAnonymous && (isAdmin || !currentTripLocked);
                 membersListDiv.innerHTML = members.map(m => `
                     <span>
                         ${m}
-                        ${isAdmin ? `<button onclick="deleteMember('${m}')" title="Remove ${m}">✕</button>` : ''}
+                        ${canManageMembers ? `<button onclick="deleteMember('${m}')" title="Remove ${m}">✕</button>` : ''}
                     </span>
                 `).join('');
             }
