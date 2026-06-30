@@ -188,6 +188,30 @@
             }
         });
 
+        // Handle email link sign-in redirect
+if (auth.isSignInWithEmailLink(window.location.href)) {
+    let email = window.localStorage.getItem('emailForSignIn');
+    if (!email) {
+        // If they opened the link on a different device, ask for email again
+        email = prompt("Please confirm your email address to complete sign-in:");
+    }
+    if (email) {
+        auth.signInWithEmailLink(email, window.location.href)
+            .then((result) => {
+                currentUser = result.user;
+                window.localStorage.removeItem('emailForSignIn');
+                // Clean the URL so the link token isn't sitting in the address bar
+                window.history.replaceState({}, document.title, window.location.pathname);
+                console.log("Email link sign-in successful:", result.user.uid);
+                checkAdminStatus();
+            })
+            .catch((error) => {
+                console.error("Error completing sign-in:", error);
+                alert("Sign-in failed: " + error.message);
+            });
+    }
+}
+
         function checkAdminStatus() {
             const adminRef = database.ref(`admins/${currentUser.uid}`);
             adminRef.once('value').then(snapshot => {
