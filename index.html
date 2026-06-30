@@ -244,26 +244,38 @@ if (auth.isSignInWithEmailLink(window.location.href)) {
     });
 }
         function updateAuthUI() {
-            const authStatus = document.getElementById('auth-status');
-            const newTripContainer = document.getElementById('new-trip-container');
-            
-            if (isAdmin) {
-                authStatus.innerHTML = `
-                    <span>Logged in as: <strong>Administrator</strong></span>
-                    <span class="status-badge admin-badge">ADMIN</span>
-                    <button onclick="logoutAdmin()" style="margin-left: 15px; padding: 5px 15px; border: none; border-radius: 4px; background: #f44336; color: white; cursor: pointer;">Logout</button>
-                `;
-                newTripContainer.style.display = 'flex';
-            } else {
-                authStatus.innerHTML = `
-                    <span>Viewing as: <strong>Guest</strong></span>
-                    <span class="status-badge user-badge">GUEST</span>
-                    <button onclick="showAdminLogin()" style="margin-left: 15px; padding: 5px 15px; border: none; border-radius: 4px; background: #4CAF50; color: white; cursor: pointer;">Admin Login</button>
-                `;
-                newTripContainer.style.display = 'none';
-            }
-        }
+    const authStatus = document.getElementById('auth-status');
+    const newTripContainer = document.getElementById('new-trip-container');
+    
+    if (isAdmin) {
+        authStatus.innerHTML = `
+            <span>Logged in as: <strong>Administrator</strong></span>
+            <span class="status-badge admin-badge">ADMIN</span>
+            <button onclick="logoutAdmin()" style="margin-left: 15px; padding: 5px 15px; border: none; border-radius: 4px; background: #f44336; color: white; cursor: pointer;">Logout</button>
+        `;
+        newTripContainer.style.display = 'flex';
+    } else if (currentUser && !currentUser.isAnonymous) {
+        authStatus.innerHTML = `
+            <span>Logged in as: <strong>${currentUser.email}</strong></span>
+            <span class="status-badge user-badge">USER</span>
+            <button onclick="showAdminLogin()" style="margin-left: 15px; padding: 5px 15px; border: none; border-radius: 4px; background: #4CAF50; color: white; cursor: pointer;">Admin Login</button>
+            <button onclick="logoutUser()" style="margin-left: 8px; padding: 5px 15px; border: none; border-radius: 4px; background: #f44336; color: white; cursor: pointer;">Logout</button>
+        `;
+        newTripContainer.style.display = 'none';
+    } else {
+        authStatus.innerHTML = `
+            <span>Not signed in</span>
+            <button onclick="showUserLogin()" style="margin-left: 15px; padding: 5px 15px; border: none; border-radius: 4px; background: #2196F3; color: white; cursor: pointer;">Sign In</button>
+        `;
+        newTripContainer.style.display = 'none';
+    }
+}
 
+function logoutUser() {
+    if (confirm("Sign out?")) {
+        auth.signOut();
+    }
+}
         function showAdminLogin() {
     const email = prompt("Enter your admin email address:");
     if (!email) return;
