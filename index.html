@@ -224,18 +224,27 @@
         }
 
         function showAdminLogin() {
-            const password = prompt("Enter admin password:");
-            if (password === ADMIN_PASSWORD) {
-                database.ref(`admins/${currentUser.uid}`).set(true).then(() => {
-                    isAdmin = true;
-                    updateAuthUI();
-                    alert("Admin login successful!");
-                });
-            } else if (password !== null) {
-                alert("Incorrect password!");
-            }
-        }
+    const email = prompt("Enter your admin email address:");
+    if (!email) return;
 
+    const actionCodeSettings = {
+        url: window.location.href, // redirects back to whatever page they're on
+        handleCodeInApp: true
+    };
+
+    auth.sendSignInLinkToEmail(email, actionCodeSettings)
+        .then(() => {
+            // Save email in localStorage so we can complete sign-in after redirect
+            window.localStorage.setItem('emailForSignIn', email);
+            alert(`Sign-in link sent to ${email}. Check your inbox and click the link.`);
+        })
+        .catch((error) => {
+            alert("Error sending sign-in link: " + error.message);
+            console.error(error);
+        });
+}
+Replace logoutAdmin() with this:
+js
         function logoutAdmin() {
             if (confirm("Logout as administrator?")) {
                 database.ref(`admins/${currentUser.uid}`).remove().then(() => {
